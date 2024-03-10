@@ -1,0 +1,9 @@
+name: mqtt2sql
+channels:
+    - default
+    - conda-forge
+dependencies:
+    - numpy
+    - pandas
+    - paho-mqtt
+    - pytest 
