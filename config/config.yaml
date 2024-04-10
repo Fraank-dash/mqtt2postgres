@@ -1,0 +1,22 @@
+db_server:
+  ip: localhost
+  port: 5432
+  connection:
+    user: postgres
+    pw: postgres
+  database:
+    db_language: postgresql
+    db_adapter: psycopg2
+    db_name: pg_database
+    db_table: pg_table
+
+mqtt_server:
+  ip: localhost
+  port: 3000
+  connection:
+    user: mqtt-user
+    pw: mqtt-password
+  topics:
+    - this/is/a/topic
+    - this/is/another/topic
+    - this/could/also/be/a/topic
