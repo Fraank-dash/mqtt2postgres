@@ -11,12 +11,10 @@ db_server:
     db_table: pg_table
 
 mqtt_server:
-  ip: localhost
-  port: 3000
+  ip: '127.0.0.1'
+  port: 1883
   connection:
-    user: mqtt-user
-    pw: mqtt-password
+    user: admin
+    pw: password
   topics:
-    - this/is/a/topic
-    - this/is/another/topic
-    - this/could/also/be/a/topic
+    - $SYS/broker/#

@@ -1,6 +1,6 @@
-hostname= "192.168.178.25"
-topics =["shellies/#"]
-auth = dict(username="mqtt-user",password="tryit1ce")
+hostname= "localhost"
+topics =["$SYS/#"]
+auth = dict(username="admin",password="password")
 #https://github.com/eclipse/paho.mqtt.python/blob/master/examples/subscribe_simple.py
 
 #!/usr/bin/python3
@@ -28,8 +28,9 @@ import paho.mqtt.subscribe as subscribe
 
 m = subscribe.simple(topics, 
                      hostname=hostname,
+                     port=1883,
                      auth=auth, 
                      retained=False, 
-                     msg_count=10)
+                     msg_count=2)
 for a in m:
     print(a.timestamp,a.topic,a.payload)

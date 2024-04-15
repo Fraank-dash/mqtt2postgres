@@ -1,0 +1,14 @@
+#datacontract
+servers:
+  postgres:
+    type: postgres
+    host: localhost
+    port: 5432
+    database: pg_database
+    schema: public
+models:
+  pg_table: # corresponds to a table
+    type: table
+    fields: 
+      my_column_1: # corresponds to a column
+        type: varchar

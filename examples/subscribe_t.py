@@ -9,11 +9,9 @@ from datetime import timedelta
 
 
 print("___LOAD_CONFIG___")
-broker = '192.168.178.25'
+broker = 'localhost'
 port = 1883
-topics =['shellies/shellies/shellyplug001/energy/relay/0',
-         'shellies/shellies/shellyplug001/energy/relay/0/power',
-         'shellies/shellies/shellyplug001/energy/relay/0/energy']
+topics =['$SYS/#']
 user_data = dict(username="mqtt-user",password="tryit1ce")
 
 
@@ -43,7 +41,7 @@ def connect_mqtt(client:mqtt_client,broker, port) -> mqtt_client:
 
 
 def subscribe(client: mqtt_client):
-    def on_message(client, userdata, msg):
+    def on_message(client, userdata,msg):
         _vals = *(t_mono2t_datetime(ref_time=ref_time,msg_timestamp=msg.timestamp)), msg.payload.decode(), msg.topic
         print(f"Time [Date]: {_vals[0]} | Time Monotonic]: {_vals[1]} | Message: {_vals[2]} | Topic: {_vals[3]}")
 
