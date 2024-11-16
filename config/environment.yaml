@@ -1,4 +1,4 @@
-name: mqtt2sql
+name: mqtt2pg
 channels:
     - default
     - conda-forge
@@ -7,3 +7,4 @@ dependencies:
     - pandas
     - paho-mqtt
     - pytest 
+    - pyyaml
