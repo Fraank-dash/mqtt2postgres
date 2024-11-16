@@ -7,8 +7,8 @@ db_server:
   database:
     db_language: postgresql
     db_adapter: psycopg2
-    db_name: pg_database
-    db_table: pg_table
+    db_name: staging_mqtt
+    db_table: tbl_staging_mqtt
 
 mqtt_server:
   ip: '127.0.0.1'
@@ -18,3 +18,6 @@ mqtt_server:
     pw: password
   topics:
     - $SYS/broker/#
+    - this/could/be/another/topic/#
+    - thats/the/third/topic/#
+    - aaand/another/one
