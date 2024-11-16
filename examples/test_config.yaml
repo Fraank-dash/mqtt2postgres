@@ -1,0 +1,21 @@
+db_server:
+  ip: raspberrypi.local
+  port: 5433
+  connection:
+    user: postgres
+    pw: postgres
+  database:
+    db_language: postgresql
+    db_adapter: psycopg2
+    db_name: staging_mqtt
+    db_table: tbl_staging_mqtt
+
+mqtt_server:
+  ip: raspberrypi.local
+  port: 1883
+  connection:
+    user: admin
+    pw: password
+  topics:
+    - $SYS/broker/#
+    - shellies/#
