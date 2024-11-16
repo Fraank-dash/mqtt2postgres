@@ -1,3 +1,5 @@
+# In order to return the current time as "datetime" this workaround is kind of necessary
+# this is the test for it
 import time
 now = time.time()
 now_mono = time.monotonic()
