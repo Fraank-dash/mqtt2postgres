@@ -8,7 +8,14 @@ db_server:
     db_language: postgresql
     db_adapter: psycopg2
     db_name: staging_mqtt
-    db_table: tbl_staging_mqtt
+      db_comment: 'This comment explain what the data is used for, that it is a staging-area which means the data is not ready to work with and you have 2 do datascience-stuff!'
+    db_tables: 
+      cluster1:
+        tbl_name: tbl_staging_mqtt
+        tbl_comment: 'comment about the first group of topics, which adds some more insights to the data for the datascientist'
+      cluster2:
+        tbl_name: tbl4cluster2
+        tbl_comment: 'comment about the second group of topics, which adds some more insights to the data for the datascientist'
 
 mqtt_server:
   ip: '127.0.0.1'
@@ -17,7 +24,9 @@ mqtt_server:
     user: admin
     pw: password
   topics:
-    - $SYS/broker/#
-    - this/could/be/another/topic/#
-    - thats/the/third/topic/#
-    - aaand/another/one
+    cluster1:
+      - $SYS/broker/#
+      - this/could/be/another/topic/#
+    cluster2:
+      - thats/the/third/topic/#
+      - aaand/another/one
