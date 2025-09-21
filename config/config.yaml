@@ -7,7 +7,8 @@ db_server:
   database:
     db_language: postgresql
     db_adapter: psycopg2
-    db_name: staging_mqtt
+    db_schema: staging
+    db_name: mqtt
       db_comment: 'This comment explain what the data is used for, that it is a staging-area which means the data is not ready to work with and you have 2 do datascience-stuff!'
     db_tables: 
       cluster1:
