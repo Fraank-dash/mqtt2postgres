@@ -9,10 +9,11 @@ from datetime import timedelta,datetime
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import inspect,text,Table
-
+from pathlib import Path
+import re
 
 class broker:
-    def __init__(self, config_file_name:str,msg_config:str='print'):
+    def __init__(self, config_file_name:Path,msg_config:str='print'):
         """
         I am not happy with the class name 'broker' since it is more like a one-directional interface 
         
@@ -38,7 +39,9 @@ class broker:
             print(ex)
         self.metadata = MetaData()
         self.metadata.reflect(bind=self._engine)
-        self.pg_table = Table(self.conf['db_server']['database']['db_table'], self.metadata, autoload = True)
+        self.pg_tables = {}
+        for key,value in self.conf['db_server']['database']['db_tables'].items():
+            self.pg_tables[key]=Table(value['tbl_name'], self.metadata, autoload_with=self._engine)
         #broker-connection
         self.ref_time = self.get_reference_time()
         self.client = mqtt_client.Client(clean_session=True)
@@ -50,13 +53,18 @@ class broker:
         self.client.connect(host=self.conf['mqtt_server']['ip'],
                             port=self.conf['mqtt_server']['port'])
         ##subscriptions
-        for topic in self.conf['mqtt_server']['topics']:
-            self.client.subscribe(topic)
+        self.topic_clusters ={}
+        self.re = []
+        for topic_cluster in self.conf['mqtt_server']['topics']:
+            for topic in self.conf['mqtt_server']['topics'][topic_cluster]:
+                self.topic_clusters[topic] = topic_cluster
+                self.re.append((re.compile(rf"^{topic.replace('#','.*')}$"),topic))
+                    
         ##other whacky stuff
         self.client.on_connect = self.on_connect()
         self.client.on_message = self.on_message(msg_config)
 
-    def load_config_file(self,file_name:str):
+    def load_config_file(self,file_name:Path):
         """func to load configfile
         """
         file = open(file=file_name,mode='r')
@@ -84,20 +92,25 @@ class broker:
                 print(f"Time [Date]: {_vals[0]} | Time Monotonic]: {_vals[1]} | Message: {_vals[2]} | Topic: {_vals[3]}")
         elif msg_config=='db':
             def on_message(client,userdata,msg:mqtt_client.MQTTMessage):
-                query = insert(self.pg_table).values(msg_date=self.t_mono2t_datetime(ref_time=self.ref_time,msg_timestamp=msg.timestamp)[0], 
-                                                     msg_topic=msg.topic, 
-                                                     msg_value=msg.payload.decode()[0:10])
-                print(query)
-                self.db_connection.execute(query)
-                self.db_connection.commit()
-                print(f"MsgFromBroker2DB sent at {datetime.now()}")
-                del query
+                try:
+                    query = insert(self.pg_tables[self.topic_clusters[msg.topic]]).values(msg_date=self.t_mono2t_datetime(ref_time=self.ref_time,msg_timestamp=msg.timestamp)[0], 
+                                                        msg_topic=msg.topic, 
+                                                        msg_value=msg.payload.decode()[0:10])
+                    print(query)
+                    self.db_connection.execute(query)
+                    self.db_connection.commit()
+                    print(f"MsgFromBroker2DB sent at {datetime.now()}")
+                    del query
+                except KeyError as ex:
+                    self.regex_check()
+                    print(ex)
         else:
             def on_message(client,userdata,msg):
                 _vals = *(self.t_mono2t_datetime(ref_time=self.ref_time,msg_timestamp=msg.timestamp)), msg.payload.decode(), msg.topic
                 print(f"Time [Date]: {_vals[0]} | Time Monotonic]: {_vals[1]} | Message: {_vals[2]} | Topic: {_vals[3]}")
         return on_message
-    
+    def regex_check(self):
+        pass
     def get_reference_time(self):
         """
         lorem ipsum
@@ -171,14 +184,20 @@ if __name__ == '__main__':
     # 2. create table
         # see https://docs.timescale.com/use-timescale/latest/hypertables/create/
 
-        # CREATE TABLE tbl_staging_mqtt (
+        # CREATE TABLE tbl4cluster1 (
         #    msg_date   TIMESTAMPTZ NOT NULL,
         #    msg_topic  TEXT        NOT NULL,
         #    msg_value  TEXT        NOT NULL
         #    );
-        # SELECT create_hypertable('tbl_staging_mqtt', by_range('msg_date'));
+        # SELECT create_hypertable('tbl4cluster1', by_range('msg_date'));
+        # CREATE TABLE tbl4cluster2 (
+        #    msg_date   TIMESTAMPTZ NOT NULL,
+        #    msg_topic  TEXT        NOT NULL,
+        #    msg_value  TEXT        NOT NULL
+        #    );
+        # SELECT create_hypertable('tbl4cluster2', by_range('msg_date'));
 
 
-    file_name=r'config/config.yaml'
+    file_name=Path(r'config/config_test2.yaml')
     x = broker(config_file_name=file_name,msg_config="db")
     x.run()

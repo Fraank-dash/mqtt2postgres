@@ -1,3 +1,5 @@
+config/config_test*
+
 # ---> Python
 # Byte-compiled / optimized / DLL files
 __pycache__/
