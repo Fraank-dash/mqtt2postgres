@@ -58,7 +58,8 @@ class broker:
         for topic_cluster in self.conf['mqtt_server']['topics']:
             for topic in self.conf['mqtt_server']['topics'][topic_cluster]:
                 self.topic_clusters[topic] = topic_cluster
-                self.re.append((re.compile(rf"^{topic.replace('#','.*')}$"),topic))
+                _regex_str = '^'+topic.replace("$","\$").replace("/","\/").replace('#','.*')+'$' 
+                self.re.append(re.compile(_regex_str))
                     
         ##other whacky stuff
         self.client.on_connect = self.on_connect()
