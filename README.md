@@ -41,3 +41,26 @@
       );
       
       SELECT create_hypertable('tbl_staging_mqtt', by_range('msg_date'));
+
+
+# db structure
+
+```mermaid
+classDiagram
+class source {
+  +id
+  +target_table
+  +message
+  +since
+  +till
+}
+class target_table
+class data {
+  source_id
+  created_at
+  payload
+}
+source -- data
+data --|> target_table 
+
+```
