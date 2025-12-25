@@ -1,5 +1,5 @@
 config/config_test*
-
+shellyconfs/CONFIG.js
 # ---> Python
 # Byte-compiled / optimized / DLL files
 __pycache__/
