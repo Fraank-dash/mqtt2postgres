@@ -1,11 +1,16 @@
-from source import broker2db
-# this should do the trick...
+from __future__ import annotations
 
-try: 
-    x = broker2db.broker(config_file_name=r'config/config.yaml')
-except Exception as ex:
-    print(ex)
-try:
-    x.run()
-except Exception as ex:
-    print(ex)
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent
+SRC = ROOT / "src"
+
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from mqtt2postgres.cli import main
+
+
+raise SystemExit(main())

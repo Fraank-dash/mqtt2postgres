@@ -1,5 +1,6 @@
 config/config_test*
 shellyconfs/CONFIG.js
+examples/docker-run.local.sh
 # ---> Python
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -4363,3 +4364,4 @@ mqtt2pg/ssl/misc/tsget
 mqtt2pg/ssl/misc/tsget.pl
 mqtt2pg/x86_64-conda-linux-gnu/bin/ld
 mqtt2pg/x86_64-conda_cos6-linux-gnu/bin/ld
+examples/TargetTbl.sh

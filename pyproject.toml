@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mqtt2postgres"
+dynamic = ["version"]
+description = "Minimal MQTT to Postgres ingestor."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi",
+  "paho-mqtt",
+  "pandas",
+  "psycopg2-binary",
+  "sqlalchemy",
+]
+
+[project.scripts]
+mqtt2postgres = "mqtt2postgres.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+fallback_version = "0.1.1"
+version_scheme = "post-release"
+local_scheme = "no-local-version"

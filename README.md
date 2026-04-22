@@ -1,66 +1,68 @@
-# most important headline 
-'source/broker2db.py' is the only 'working' py-script so far (16.11.2024)
-* it is still more like a "proof-of-concept" or "prototype"
-* the code should be executed via (your own) main.py or take a look at main_test.py
+# mqtt2postgres
 
-# STEPS TO DO, IN ORDER TO SET EVERYTHING UP (that's not yet an automated part of the setup)
-1. Python_ENV
-* conda create --name mqtt2pg python=3.13
-* conda activate mqtt2pg
-* conda install pyyaml conda-forge::paho-mqtt psycopg2 sqlalchemy pandas numpy networkx
-2. ___DOCKER___
-* MQTT-Broker -> basic installation... https://hub.docker.com/_/eclipse-mosquitto/
-  -   docker pull eclipse-mosquitto
-  -   docker run -it -p  1883:1883 ...
-* Postgres (Timescale(!)) -> basic installation... https://docs.timescale.com/self-hosted/latest/install/installation-docker/
-  Timescale because handling timeseries with hypertables, pre written timeseries aggregation etc.
-  - docker pull timescale/timescaledb-ha:pg16
-  - docker run -d --name postgres -p 5432:5432 -e POSTGRES_PASSWORD=postgres timescale/timescaledb-ha:pg16
-  - ___Postgres-Terminal or via PGAdmin4___
-    + create new db
+Minimal CLI tool that subscribes to MQTT topics and writes messages into existing Postgres tables.
 
-      CREATE DATABASE staging_mqtt
-      WITH
-      OWNER = postgres
-      ENCODING = 'UTF8'
-      LC_COLLATE = 'C.UTF-8'
-      LC_CTYPE = 'C.UTF-8'
-      LOCALE_PROVIDER = 'libc'
-      TABLESPACE = pg_default
-      CONNECTION LIMIT = -1
-      IS_TEMPLATE = False;
-        
-      COMMENT ON DATABASE staging_mqtt
-      IS 'Staging für den mqtt_client';
-    + create table -> see https://docs.timescale.com/use-timescale/latest/hypertables/create/
-   
-      CREATE TABLE tbl_staging_mqtt (
-      msg_date   TIMESTAMPTZ NOT NULL,
-      msg_topic  TEXT        NOT NULL,
-      msg_value  TEXT        NOT NULL
-      );
-      
-      SELECT create_hypertable('tbl_staging_mqtt', by_range('msg_date'));
+## Local environment
 
+Create and activate the conda environment:
 
-# db structure
-
-```mermaid
-classDiagram
-class source {
-  +id
-  +target_table
-  +message
-  +since
-  +till
-}
-class target_table
-class data {
-  source_id
-  created_at
-  payload
-}
-source -- data
-data --|> target_table 
-
+```bash
+conda env create -f environment.yml
+conda activate mqtt2postgres
 ```
+
+Run the tool through the root wrapper:
+
+```bash
+python main.py \
+  --db-host 127.0.0.1 \
+  --db-name mqtt \
+  --db-user postgres \
+  --db-password postgres \
+  --mqtt-host 127.0.0.1 \
+  --mqtt-user admin \
+  --mqtt-password secret \
+  --map '$SYS/broker/#=tbl_broker_metrics' \
+  --map 'sensors/+/temp=tbl_sensor_temp'
+```
+
+If you prefer not to pass secrets on the command line, the same values can still come from the environment:
+
+```bash
+export POSTGRES_USERNAME=postgres
+export POSTGRES_PASSWORD=postgres
+export MQTT_USERNAME=admin
+export MQTT_PASSWORD=secret
+```
+
+## Runtime contract
+
+- Target tables must already exist.
+- Each target table must expose `msg_date`, `msg_topic`, and `msg_value`.
+- Mappings are evaluated in the order they are passed. The first matching mapping wins.
+- MQTT topic filters use normal MQTT wildcard semantics.
+
+## Docker
+
+Build the image:
+
+```bash
+docker build -t mqtt2postgres .
+```
+
+Run it with the same CLI flags and environment variables you use locally:
+
+```bash
+docker run --rm \
+  mqtt2postgres \
+  --db-host db.example.internal \
+  --db-name mqtt \
+  --db-user postgres \
+  --db-password postgres \
+  --mqtt-host broker.example.internal \
+  --mqtt-user admin \
+  --mqtt-password secret \
+  --map '$SYS/broker/#=tbl_broker_metrics'
+```
+
+The container is expected to keep running after startup. This tool is a long-lived MQTT consumer, so an apparently idle container usually means it is waiting for incoming messages and continuing to ingest until you stop it.

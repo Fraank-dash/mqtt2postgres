@@ -1,0 +1,11 @@
+name: mqtt2postgres
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - fastapi
+  - pandas
+  - paho-mqtt
+  - psycopg2
+  - pytest
+  - sqlalchemy
