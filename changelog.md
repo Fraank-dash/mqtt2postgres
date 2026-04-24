@@ -2,11 +2,23 @@
 
 ## Unreleased
 
+### Topic: Data Contracts
+- Switched runtime table mapping from raw table names to ODCS contract files.
+- Added ODCS sample contracts under `contracts/` and contract loading/validation in the application runtime.
+- Aligned Postgres credential handling with Datacontract-style environment variables.
+- Refactored the runtime to a two-layer contract model with one raw broker contract and one or more derived Postgres contracts.
+
+### Topic: Testing
+- Added contract-focused tests for ODCS parsing, contract-backed config loading, and database schema validation against a contract.
+
 ### Topic: Documentation
-- Clarified in `README.md` that the Docker container is expected to remain running because the ingestor is a long-lived consumer process.
+- Updated `README.md` to document the ODCS-driven runtime, Datacontract CLI lint/test workflow, Git tag-based versioning, and the long-running Docker container behavior.
+
+### Topic: Container
+- Updated the Docker image to include the example `contracts/` directory used by the documented runtime commands.
 
 ### Topic: Versioning
-- Bumped the fallback package version to `0.1.1`.
+- Bumped the `setuptools-scm` fallback version to `0.2.0` for the contract-based runtime changes.
 
 ## 0.1.1
 
