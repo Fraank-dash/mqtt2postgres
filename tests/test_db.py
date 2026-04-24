@@ -74,3 +74,36 @@ def test_database_writer_builds_insert_statement() -> None:
 
     assert statement.compile().params["msg_topic"] == "devices/test"
     assert statement.compile().params["msg_value"] == "42"
+
+
+def test_database_writer_insert_message_returns_execute_result() -> None:
+    class ConnectionStub:
+        def __init__(self) -> None:
+            self.committed = False
+
+        def execute(self, statement):
+            return "result"
+
+        def commit(self) -> None:
+            self.committed = True
+
+    metadata = MetaData()
+    table = Table(
+        "tbl_mqtt",
+        metadata,
+        Column("msg_date", TIMESTAMP(timezone=True)),
+        Column("msg_topic", String),
+        Column("msg_value", String),
+    )
+    connection = ConnectionStub()
+    writer = DatabaseWriter(
+        contract=build_contract(),
+        engine=object(),
+        table=table,
+        connection=connection,
+    )
+
+    result = writer.insert_message(topic="devices/test", payload="42")
+
+    assert result == "result"
+    assert connection.committed is True

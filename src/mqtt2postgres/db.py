@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import MetaData, Table, create_engine, inspect
 from sqlalchemy.engine import Connection, Engine, URL
@@ -107,14 +108,15 @@ class DatabaseWriter:
         topic: str,
         payload: str,
         message_time: datetime | None = None,
-    ) -> None:
+    ) -> Any:
         statement = self.build_insert(
             topic=topic,
             payload=payload,
             message_time=message_time,
         )
-        self.connection.execute(statement)
+        result = self.connection.execute(statement)
         self.connection.commit()
+        return result
 
     def close(self) -> None:
         self.connection.close()

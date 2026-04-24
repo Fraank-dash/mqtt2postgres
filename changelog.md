@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Topic: Logging
+- Added structured JSON runtime logging for Docker console output with canonical service, MQTT, routing, database, and config events.
+- Added an internal event middleware pipeline with context enrichment and payload redaction.
+- Added startup snapshot diff logging for broker and derived contract add, remove, and change detection.
+
 ### Topic: Data Contracts
 - Switched runtime table mapping from raw table names to ODCS contract files.
 - Added ODCS sample contracts under `contracts/` and contract loading/validation in the application runtime.
@@ -10,9 +15,10 @@
 
 ### Topic: Testing
 - Added contract-focused tests for ODCS parsing, contract-backed config loading, and database schema validation against a contract.
+- Added logging-focused tests covering event serialization, payload redaction, snapshot diffing, MQTT lifecycle events, and database write outcomes.
 
 ### Topic: Documentation
-- Updated `README.md` to document the ODCS-driven runtime, Datacontract CLI lint/test workflow, Git tag-based versioning, and the long-running Docker container behavior.
+- Updated `README.md` to document the ODCS-driven runtime, Datacontract CLI lint/test workflow, Git tag-based versioning, the Docker logging model, and snapshot-backed config diffing.
 
 ### Topic: Container
 - Updated the Docker image to include the example `contracts/` directory used by the documented runtime commands.

@@ -84,6 +84,9 @@ def test_resolve_config_requires_database_password(tmp_path: Path) -> None:
         mqtt_user=None,
         mqtt_password=None,
         mqtt_client_id="mqtt2postgres",
+        log_format=None,
+        log_level=None,
+        config_snapshot_path=None,
         broker_contract=str(broker),
         derived_contracts=[str(derived)],
     )
@@ -101,6 +104,9 @@ def test_resolve_config_requires_mqtt_password_if_username_is_set(tmp_path: Path
         mqtt_user="mqtt-user",
         mqtt_password=None,
         mqtt_client_id="mqtt2postgres",
+        log_format=None,
+        log_level=None,
+        config_snapshot_path=None,
         broker_contract=str(broker),
         derived_contracts=[str(derived)],
     )
@@ -124,6 +130,9 @@ def test_resolve_config_loads_two_layer_contracts(tmp_path: Path) -> None:
         mqtt_user=None,
         mqtt_password=None,
         mqtt_client_id="custom-client",
+        log_format=None,
+        log_level=None,
+        config_snapshot_path=None,
         broker_contract=str(broker),
         derived_contracts=[str(derived)],
     )
@@ -138,6 +147,8 @@ def test_resolve_config_loads_two_layer_contracts(tmp_path: Path) -> None:
 
     assert config.broker_contract.server.topic_filters == ("devices/+/temp",)
     assert config.derived_contracts[0].table_name == "tbl_temperature"
+    assert config.log_format == "json"
+    assert config.log_level == "INFO"
 
 
 def test_resolve_config_rejects_source_contract_mismatch(tmp_path: Path) -> None:
@@ -149,6 +160,9 @@ def test_resolve_config_rejects_source_contract_mismatch(tmp_path: Path) -> None
         mqtt_user=None,
         mqtt_password=None,
         mqtt_client_id="custom-client",
+        log_format=None,
+        log_level=None,
+        config_snapshot_path=None,
         broker_contract=str(broker),
         derived_contracts=[str(derived)],
     )
@@ -161,3 +175,36 @@ def test_resolve_config_rejects_source_contract_mismatch(tmp_path: Path) -> None
                 "DATACONTRACT_POSTGRES_PASSWORD": "secret",
             },
         )
+
+
+def test_resolve_config_uses_logging_environment_defaults(tmp_path: Path) -> None:
+    broker = tmp_path / "broker.odcs.yaml"
+    derived = tmp_path / "derived.odcs.yaml"
+    snapshot = tmp_path / "state" / "snapshot.json"
+    write_broker_contract(broker)
+    write_derived_contract(derived)
+    args = argparse.Namespace(
+        mqtt_user=None,
+        mqtt_password=None,
+        mqtt_client_id="custom-client",
+        log_format=None,
+        log_level=None,
+        config_snapshot_path=None,
+        broker_contract=str(broker),
+        derived_contracts=[str(derived)],
+    )
+
+    config = resolve_config(
+        args,
+        environ={
+            "DATACONTRACT_POSTGRES_USERNAME": "postgres",
+            "DATACONTRACT_POSTGRES_PASSWORD": "secret",
+            "MQTT2POSTGRES_LOG_LEVEL": "DEBUG",
+            "MQTT2POSTGRES_LOG_FORMAT": "json",
+            "MQTT2POSTGRES_CONFIG_SNAPSHOT_PATH": str(snapshot),
+        },
+    )
+
+    assert config.log_level == "DEBUG"
+    assert config.log_format == "json"
+    assert config.config_snapshot_path == snapshot

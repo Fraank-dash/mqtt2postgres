@@ -13,6 +13,11 @@ from mqtt2postgres.contracts import (
     load_broker_contract,
     load_derived_contract,
 )
+from mqtt2postgres.runtime_logging import (
+    DEFAULT_LOG_FORMAT,
+    DEFAULT_LOG_LEVEL,
+    default_snapshot_path,
+)
 
 
 class ConfigError(ValueError):
@@ -26,6 +31,9 @@ class AppConfig:
     mqtt_username: str | None
     mqtt_password: str | None
     mqtt_client_id: str
+    log_format: str
+    log_level: str
+    config_snapshot_path: Path
     broker_contract: BrokerContract
     derived_contracts: tuple[DerivedContract, ...]
 
@@ -49,6 +57,26 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "--mqtt-client-id",
         default="mqtt2postgres",
         help="MQTT client identifier",
+    )
+    parser.add_argument(
+        "--log-format",
+        dest="log_format",
+        choices=("json",),
+        default=None,
+        help="Runtime log format. Defaults to json.",
+    )
+    parser.add_argument(
+        "--log-level",
+        dest="log_level",
+        choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
+        default=None,
+        help="Runtime log level. Defaults to INFO.",
+    )
+    parser.add_argument(
+        "--config-snapshot-path",
+        dest="config_snapshot_path",
+        default=None,
+        help="Path to the persisted config snapshot used for startup diff logging.",
     )
     parser.add_argument(
         "--broker-contract",
@@ -85,6 +113,13 @@ def resolve_config(
 
     mqtt_username = args.mqtt_user or env.get("MQTT_USERNAME")
     mqtt_password = args.mqtt_password or env.get("MQTT_PASSWORD")
+    log_format = args.log_format or env.get("MQTT2POSTGRES_LOG_FORMAT") or DEFAULT_LOG_FORMAT
+    log_level = args.log_level or env.get("MQTT2POSTGRES_LOG_LEVEL") or DEFAULT_LOG_LEVEL
+    snapshot_path = Path(
+        args.config_snapshot_path
+        or env.get("MQTT2POSTGRES_CONFIG_SNAPSHOT_PATH")
+        or default_snapshot_path()
+    )
     if mqtt_username and not mqtt_password:
         raise ConfigError(
             "An MQTT password is required when an MQTT username is configured. Pass --mqtt-password or set MQTT_PASSWORD."
@@ -121,6 +156,9 @@ def resolve_config(
         mqtt_username=mqtt_username,
         mqtt_password=mqtt_password,
         mqtt_client_id=args.mqtt_client_id,
+        log_format=log_format,
+        log_level=log_level,
+        config_snapshot_path=snapshot_path,
         broker_contract=broker_contract,
         derived_contracts=tuple(derived_contracts),
     )

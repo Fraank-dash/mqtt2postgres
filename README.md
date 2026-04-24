@@ -84,6 +84,26 @@ Package versions are derived from Git tags via `setuptools-scm`.
 - In GitHub Actions, make sure the checkout step fetches tags, for example with `fetch-depth: 0`.
 - The `fallback_version` in `pyproject.toml` is only used when Git tag metadata is unavailable.
 
+## Logging
+
+The runtime writes structured JSON logs to the Docker console by default.
+
+- `--log-format json` is the default output mode.
+- `--log-level INFO` is the default verbosity.
+- `--config-snapshot-path` controls where the app stores the last loaded broker/derived contract snapshot for startup diff logging.
+
+The app emits lifecycle, MQTT, routing, database, and config snapshot events such as:
+
+- `service.starting`
+- `mqtt.connected`
+- `mqtt.subscribed`
+- `message.routed`
+- `db.write_succeeded`
+- `broker.changed`
+- `derived_contract.removed`
+
+MQTT payload bodies are not logged. The logs include metadata such as topic, payload size, target table, status, and error details when a write fails.
+
 ## Runtime behavior
 
 - Target tables must already exist.
@@ -91,6 +111,7 @@ Package versions are derived from Git tags via `setuptools-scm`.
 - MQTT subscriptions come from the broker contract.
 - Routing comes from each derived contract's `sourceTopicFilters`.
 - If multiple derived contracts match the same topic, the first derived contract passed on the CLI wins.
+- Broker and derived contract add/remove/change events are detected at startup by diffing the current config against the persisted snapshot file.
 
 ## Docker
 
@@ -106,11 +127,16 @@ Run it with the same CLI flags and environment variables you use locally:
 docker run --rm \
   -e DATACONTRACT_POSTGRES_USERNAME=postgres \
   -e DATACONTRACT_POSTGRES_PASSWORD=postgres \
+  -v "$(pwd)/state:/var/lib/mqtt2postgres" \
   mqtt2postgres \
+  --log-level INFO \
+  --config-snapshot-path /var/lib/mqtt2postgres/config-snapshot.json \
   --mqtt-user admin \
   --mqtt-password secret \
   --broker-contract contracts/raw/mqtt_broker.odcs.yaml \
   --derived-contract contracts/derived/tbl_broker_metrics.odcs.yaml
 ```
+
+Use `docker logs` to inspect the JSON event stream. If the snapshot path is mounted from the host, restarting the container with changed contracts will emit `added`, `removed`, and `changed` events for the broker and derived contracts.
 
 The container is expected to keep running after startup. This tool is a long-lived MQTT consumer, so an apparently idle container usually means it is waiting for incoming messages and continuing to ingest until you stop it.
