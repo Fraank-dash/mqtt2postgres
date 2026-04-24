@@ -4,6 +4,7 @@ channels:
 dependencies:
   - python=3.13
   - fastapi
+  - numpy
   - pandas
   - paho-mqtt
   - psycopg2

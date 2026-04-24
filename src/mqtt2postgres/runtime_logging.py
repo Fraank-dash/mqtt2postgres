@@ -145,9 +145,12 @@ class EventLogger:
         return event
 
     def _sink_middleware(self, event: RuntimeEvent) -> None:
-        if self.log_format != "json":
+        if self.log_format == "json":
+            payload = json.dumps(event.to_record(), sort_keys=True)
+        elif self.log_format == "text":
+            payload = render_text_event(event)
+        else:
             raise ValueError(f"Unsupported log format '{self.log_format}'.")
-        payload = json.dumps(event.to_record(), sort_keys=True)
         self.logger.log(level_to_int(event.level), payload)
         return None
 
@@ -197,6 +200,36 @@ def redact_value(value: Any) -> Any:
     if isinstance(value, tuple):
         return [redact_value(item) for item in value]
     return value
+
+
+def render_text_event(event: RuntimeEvent) -> str:
+    parts = [
+        event.timestamp or datetime.now(timezone.utc).isoformat(),
+        event.level,
+        event.component,
+        event.event,
+        event.message,
+    ]
+    context = []
+    if event.status:
+        context.append(f"status={event.status}")
+    if event.topic:
+        context.append(f"topic={event.topic}")
+    if event.table:
+        context.append(f"table={event.table}")
+    if event.broker_contract_id:
+        context.append(f"broker={event.broker_contract_id}")
+    if event.derived_contract_id:
+        context.append(f"derived={event.derived_contract_id}")
+    if event.details:
+        details = ", ".join(
+            f"{key}={event.details[key]!r}" for key in sorted(event.details)
+        )
+        context.append(f"details={{ {details} }}")
+    if context:
+        parts.append("|")
+        parts.append(" ".join(context))
+    return " ".join(parts)
 
 
 def default_snapshot_path() -> Path:

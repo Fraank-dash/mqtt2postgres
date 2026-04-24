@@ -61,9 +61,9 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--log-format",
         dest="log_format",
-        choices=("json",),
+        choices=("json", "text"),
         default=None,
-        help="Runtime log format. Defaults to json.",
+        help="Runtime log format. Use json for Docker and text for local terminal debugging. Defaults to json.",
     )
     parser.add_argument(
         "--log-level",

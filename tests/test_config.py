@@ -208,3 +208,30 @@ def test_resolve_config_uses_logging_environment_defaults(tmp_path: Path) -> Non
     assert config.log_level == "DEBUG"
     assert config.log_format == "json"
     assert config.config_snapshot_path == snapshot
+
+
+def test_resolve_config_accepts_text_log_format(tmp_path: Path) -> None:
+    broker = tmp_path / "broker.odcs.yaml"
+    derived = tmp_path / "derived.odcs.yaml"
+    write_broker_contract(broker)
+    write_derived_contract(derived)
+    args = argparse.Namespace(
+        mqtt_user=None,
+        mqtt_password=None,
+        mqtt_client_id="custom-client",
+        log_format="text",
+        log_level="INFO",
+        config_snapshot_path=None,
+        broker_contract=str(broker),
+        derived_contracts=[str(derived)],
+    )
+
+    config = resolve_config(
+        args,
+        environ={
+            "DATACONTRACT_POSTGRES_USERNAME": "postgres",
+            "DATACONTRACT_POSTGRES_PASSWORD": "secret",
+        },
+    )
+
+    assert config.log_format == "text"

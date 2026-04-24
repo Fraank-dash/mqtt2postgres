@@ -86,9 +86,10 @@ Package versions are derived from Git tags via `setuptools-scm`.
 
 ## Logging
 
-The runtime writes structured JSON logs to the Docker console by default.
+The runtime writes logs to stdout/stderr in both Docker and local terminal runs.
 
-- `--log-format json` is the default output mode.
+- `--log-format json` is the default and is the right choice for Docker.
+- `--log-format text` is intended for local development and debugger sessions.
 - `--log-level INFO` is the default verbosity.
 - `--config-snapshot-path` controls where the app stores the last loaded broker/derived contract snapshot for startup diff logging.
 
@@ -103,6 +104,68 @@ The app emits lifecycle, MQTT, routing, database, and config snapshot events suc
 - `derived_contract.removed`
 
 MQTT payload bodies are not logged. The logs include metadata such as topic, payload size, target table, status, and error details when a write fails.
+
+For local development, a typical command is:
+
+```bash
+python main.py \
+  --log-format text \
+  --log-level DEBUG \
+  --broker-contract contracts/raw/mqtt_broker.odcs.yaml \
+  --derived-contract contracts/derived/tbl_broker_metrics.odcs.yaml \
+  --derived-contract contracts/derived/tbl_sensor_temp.odcs.yaml
+```
+
+## Local MQTT Testing
+
+For quick end-to-end testing, run a local Mosquitto broker and a synthetic publisher.
+
+Start the broker in the foreground:
+
+```bash
+./scripts/dev/start-local-mqtt-broker.sh
+```
+
+Stop it from another terminal:
+
+```bash
+./scripts/dev/stop-local-mqtt-broker.sh
+```
+
+Then run the ingestor locally in another terminal:
+
+```bash
+export DATACONTRACT_POSTGRES_USERNAME=postgres
+export DATACONTRACT_POSTGRES_PASSWORD=postgres
+
+python main.py \
+  --log-format text \
+  --log-level DEBUG \
+  --broker-contract contracts/raw/mqtt_broker.odcs.yaml \
+  --derived-contract contracts/derived/tbl_broker_metrics.odcs.yaml \
+  --derived-contract contracts/derived/tbl_sensor_temp.odcs.yaml
+```
+
+Publish random sensor values that match the existing `sensors/+/temp` contract route:
+
+```bash
+python examples/publish_random.local.py \
+  --host 127.0.0.1 \
+  --port 1883 \
+  --topic sensors/node-1/temp \
+  --min-value 0 \
+  --max-value 10 \
+  --frequency-seconds 1 \
+  --seed 7
+```
+
+Useful publisher options:
+
+- `--count 5` publishes a fixed number of messages and exits
+- `--qos 1` changes MQTT publish QoS
+- `--seed 7` makes the generated numeric sequence repeatable
+
+The publisher sends raw numeric UTF-8 payloads such as `4.271934`, not JSON.
 
 ## Runtime behavior
 

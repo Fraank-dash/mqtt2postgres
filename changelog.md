@@ -2,10 +2,15 @@
 
 ## Unreleased
 
+### Topic: Local Testing
+- Added a local Mosquitto broker config and wrapper scripts for quick MQTT development testing.
+- Added a NumPy-based Python publisher that emits random numeric payloads to configurable MQTT topics and publish intervals.
+
 ### Topic: Logging
 - Added structured JSON runtime logging for Docker console output with canonical service, MQTT, routing, database, and config events.
 - Added an internal event middleware pipeline with context enrichment and payload redaction.
 - Added startup snapshot diff logging for broker and derived contract add, remove, and change detection.
+- Added a human-readable `text` log format for local terminal and debugger sessions alongside the Docker-oriented JSON format.
 
 ### Topic: Data Contracts
 - Switched runtime table mapping from raw table names to ODCS contract files.
@@ -16,6 +21,9 @@
 ### Topic: Testing
 - Added contract-focused tests for ODCS parsing, contract-backed config loading, and database schema validation against a contract.
 - Added logging-focused tests covering event serialization, payload redaction, snapshot diffing, MQTT lifecycle events, and database write outcomes.
+
+### Topic: Developer Tooling
+- Added a repo-local VS Code `launch.json` with ready-to-use Python, pytest, and application debug configurations for the `src/` layout.
 
 ### Topic: Documentation
 - Updated `README.md` to document the ODCS-driven runtime, Datacontract CLI lint/test workflow, Git tag-based versioning, the Docker logging model, and snapshot-backed config diffing.
