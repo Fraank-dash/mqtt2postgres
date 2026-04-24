@@ -4,4 +4,4 @@ set -eu
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/examples/local-stack/docker-compose.yml"
 
-exec docker compose -f "$COMPOSE_FILE" up mqtt-broker
+docker compose -f "$COMPOSE_FILE" down -v

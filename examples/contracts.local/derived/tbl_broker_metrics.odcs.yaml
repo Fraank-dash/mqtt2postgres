@@ -1,0 +1,27 @@
+name: Broker Metrics Aggregate
+version: 1.0.0
+id: urn:mqtt2postgres:tbl_broker_metrics:local
+servers:
+  - server: postgres-prod
+    type: postgres
+    host: 127.0.0.1
+    port: 55432
+    database: mqtt
+    schema: public
+models:
+  tbl_broker_metrics:
+    type: table
+    fields:
+      msg_date:
+        type: timestamp
+        required: true
+      msg_topic:
+        type: text
+        required: true
+      msg_value:
+        type: text
+        required: true
+customProperties:
+  sourceContractId: urn:mqtt:broker:raw
+  sourceTopicFilters:
+    - "$SYS/broker/messages/#"

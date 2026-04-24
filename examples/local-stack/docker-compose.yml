@@ -1,0 +1,21 @@
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:2
+    container_name: mqtt2postgres-local-broker
+    ports:
+      - "1883:1883"
+    volumes:
+      - ../mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  postgres:
+    image: postgres:16
+    container_name: mqtt2postgres-local-postgres
+    environment:
+      POSTGRES_DB: mqtt
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "55432:5432"
+    volumes:
+      - ../sql/Target_Table.sql:/docker-entrypoint-initdb.d/10-target-table.sql:ro
+      - ../sql/Target_Table2.sql:/docker-entrypoint-initdb.d/20-target-table2.sql:ro
