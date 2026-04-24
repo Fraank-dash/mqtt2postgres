@@ -10,7 +10,6 @@ from mqtt2postgres.publisher import (
     PublisherError,
     config_from_args,
     create_rng,
-    format_payload,
     generate_value,
     main,
     publish_messages,
@@ -18,6 +17,7 @@ from mqtt2postgres.publisher import (
     run_publisher,
     validate_config,
 )
+from mqtt2postgres.tracing import parse_trace_payload
 
 
 class FakeClient:
@@ -55,8 +55,10 @@ def build_config(**overrides) -> PublisherConfig:
         frequency_seconds=0.5,
         count=3,
         client_id="publisher-test",
+        publisher_id="publisher-1",
         qos=1,
         seed=7,
+        trace_id="trace-1",
     )
     return PublisherConfig(**(base.__dict__ | overrides))
 
@@ -89,11 +91,24 @@ def test_seeded_rng_is_deterministic() -> None:
     assert values_a == values_b
 
 
-def test_format_payload_returns_plain_numeric_string() -> None:
-    payload = format_payload(4.2719342)
+def test_publish_payload_contains_trace_fields() -> None:
+    client = FakeClient()
 
-    assert payload == "4.271934"
-    assert "{" not in payload
+    publish_messages(
+        client,
+        build_config(count=1, seed=11, trace_id="trace-123"),
+        sleep_fn=lambda _: None,
+        emit_line=lambda _: None,
+        now_fn=lambda: datetime(2026, 4, 24, tzinfo=timezone.utc),
+    )
+
+    envelope = parse_trace_payload(client.publish_calls[0][1])
+
+    assert envelope.trace_id == "trace-123"
+    assert envelope.publisher_id == "publisher-1"
+    assert envelope.sequence == 1
+    assert envelope.event_id is not None
+    assert envelope.value is not None
 
 
 def test_publish_messages_respects_count_limit() -> None:
@@ -169,27 +184,34 @@ def test_config_from_args_builds_valid_config() -> None:
         frequency_seconds=1.0,
         count=5,
         client_id="publisher-test",
+        publisher_id=None,
         qos=0,
         seed=11,
+        trace_id="trace-123",
     )
 
     config = config_from_args(args)
 
     assert config.count == 5
     assert config.seed == 11
+    assert config.publisher_id == "publisher-test"
+    assert config.trace_id == "trace-123"
 
 
 def test_render_publish_message_contains_core_fields() -> None:
     rendered = render_publish_message(
         index=2,
         topic="sensors/node-1/temp",
-        payload="4.200000",
+        payload="{\"value\":4.2}",
         timestamp=datetime(2026, 4, 24, tzinfo=timezone.utc),
+        event_id="event-1",
+        trace_id="trace-1",
     )
 
     assert "index=2" in rendered
     assert "topic=sensors/node-1/temp" in rendered
-    assert "payload=4.200000" in rendered
+    assert "event_id=event-1" in rendered
+    assert "trace_id=trace-1" in rendered
 
 
 def test_main_returns_zero_on_keyboard_interrupt(monkeypatch) -> None:

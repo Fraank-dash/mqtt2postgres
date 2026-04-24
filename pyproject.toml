@@ -28,6 +28,6 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools_scm]
-fallback_version = "0.2.0"
+fallback_version = "0.3.0"
 version_scheme = "post-release"
 local_scheme = "no-local-version"

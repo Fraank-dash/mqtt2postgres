@@ -8,40 +8,36 @@ from sqlalchemy import MetaData, Table, create_engine, inspect
 from sqlalchemy.engine import Connection, Engine, URL
 from sqlalchemy.sql import Insert
 
-from mqtt2postgres.contracts import DerivedContract, REQUIRED_FIELDS
+from mqtt2postgres.config import AppConfig, Route
+from mqtt2postgres.tracing import TraceEnvelope
+
+REQUIRED_FIELDS = frozenset({"msg_date", "msg_topic", "msg_value"})
 
 
-def create_database_engine(contract: DerivedContract, username: str, password: str) -> Engine:
+def create_database_engine(config: AppConfig) -> Engine:
     url = URL.create(
         drivername="postgresql+psycopg2",
-        username=username,
-        password=password,
-        host=contract.server.host,
-        port=contract.server.port,
-        database=contract.server.database,
+        username=config.db_username,
+        password=config.db_password,
+        host=config.db_host,
+        port=config.db_port,
+        database=config.db_name,
     )
     return create_engine(url, future=True)
 
 
-def validate_table_contract(table_name: str, column_names: list[str] | tuple[str, ...]) -> None:
+def validate_table_columns(table_name: str, column_names: list[str] | tuple[str, ...]) -> None:
     missing_columns = REQUIRED_FIELDS.difference(column_names)
     if missing_columns:
         missing = ", ".join(sorted(missing_columns))
         raise ValueError(f"Table '{table_name}' is missing required columns: {missing}.")
 
 
-def validate_table_matches_contract(contract: DerivedContract, column_names: tuple[str, ...]) -> None:
-    missing_columns = set(contract.fields).difference(column_names)
-    if missing_columns:
-        missing = ", ".join(sorted(missing_columns))
-        raise ValueError(
-            f"Table '{contract.server.schema}.{contract.table_name}' does not satisfy contract '{contract.path}'. Missing columns: {missing}."
-        )
-
-
 def load_table(
     engine: Engine,
-    contract: DerivedContract,
+    *,
+    table_name: str,
+    schema: str,
     metadata: MetaData | None = None,
     inspector=None,
     table_factory=Table,
@@ -49,42 +45,38 @@ def load_table(
     metadata = metadata or MetaData()
     inspector = inspector or inspect(engine)
 
-    if not inspector.has_table(contract.table_name, schema=contract.server.schema):
-        raise ValueError(
-            f"Table '{contract.server.schema}.{contract.table_name}' does not exist."
-        )
+    if not inspector.has_table(table_name, schema=schema):
+        raise ValueError(f"Table '{schema}.{table_name}' does not exist.")
 
     table = table_factory(
-        contract.table_name,
+        table_name,
         metadata,
-        schema=contract.server.schema,
+        schema=schema,
         autoload_with=engine,
     )
-    column_names = tuple(table.columns.keys())
-    validate_table_contract(contract.table_name, column_names)
-    validate_table_matches_contract(contract, column_names)
+    validate_table_columns(table_name, tuple(table.columns.keys()))
     return table
 
 
 @dataclass
 class DatabaseWriter:
-    contract: DerivedContract
+    route: Route
     engine: Engine
     table: Table
     connection: Connection
 
     @classmethod
-    def from_contract(
+    def from_route(
         cls,
-        contract: DerivedContract,
-        username: str,
-        password: str,
+        *,
+        route: Route,
+        config: AppConfig,
     ) -> "DatabaseWriter":
-        engine = create_database_engine(contract, username=username, password=password)
+        engine = create_database_engine(config)
         connection = engine.connect()
-        table = load_table(engine=engine, contract=contract)
+        table = load_table(engine=engine, table_name=route.table_name, schema=config.db_schema)
         return cls(
-            contract=contract,
+            route=route,
             engine=engine,
             table=table,
             connection=connection,
@@ -94,29 +86,55 @@ class DatabaseWriter:
         self,
         topic: str,
         payload: str,
-        message_time: datetime | None = None,
+        *,
+        trace: TraceEnvelope | None = None,
+        received_at: datetime | None = None,
+        committed_at: datetime | None = None,
     ) -> Insert:
-        timestamp = message_time or datetime.now(timezone.utc)
-        return self.table.insert().values(
-            msg_date=timestamp,
-            msg_topic=topic,
-            msg_value=payload,
-        )
+        received_at = received_at or datetime.now(timezone.utc)
+        committed_at = committed_at or received_at
+        column_names = set(self.table.columns.keys())
+        values: dict[str, Any] = {
+            "msg_date": received_at,
+            "msg_topic": topic,
+            "msg_value": payload,
+        }
+        if trace is not None:
+            if "event_id" in column_names:
+                values["event_id"] = trace.event_id
+            if "trace_id" in column_names:
+                values["trace_id"] = trace.trace_id
+            if "publisher_id" in column_names:
+                values["publisher_id"] = trace.publisher_id
+            if "sequence" in column_names:
+                values["sequence"] = trace.sequence
+            if "published_at" in column_names:
+                values["published_at"] = trace.published_at
+            if "received_at" in column_names:
+                values["received_at"] = received_at
+            if "committed_at" in column_names:
+                values["committed_at"] = committed_at
+        return self.table.insert().values(**values)
 
     def insert_message(
         self,
         topic: str,
         payload: str,
-        message_time: datetime | None = None,
+        trace: TraceEnvelope | None = None,
+        received_at: datetime | None = None,
     ) -> Any:
+        received_at = received_at or datetime.now(timezone.utc)
+        committed_at = datetime.now(timezone.utc)
         statement = self.build_insert(
             topic=topic,
             payload=payload,
-            message_time=message_time,
+            trace=trace,
+            received_at=received_at,
+            committed_at=committed_at,
         )
         result = self.connection.execute(statement)
         self.connection.commit()
-        return result
+        return {"result": result, "committed_at": committed_at}
 
     def close(self) -> None:
         self.connection.close()

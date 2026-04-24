@@ -1,4 +1,28 @@
 services:
+  mqtt-publisher:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: mqtt2postgres:local
+    container_name: mqtt2postgres-local-publisher
+    environment:
+      PYTHONUNBUFFERED: "1"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        sleep 5;
+        exec python -m mqtt2postgres.publisher
+        --host mqtt-broker
+        --port 1883
+        --topic sensors/node-1/temp
+        --min-value 0
+        --max-value 10
+        --frequency-seconds 1
+    depends_on:
+      mqtt-subscriber:
+        condition: service_started
+    restart: unless-stopped
+
   mqtt-broker:
     image: eclipse-mosquitto:2
     container_name: mqtt2postgres-local-broker
@@ -7,15 +31,61 @@ services:
     volumes:
       - ../mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
-  postgres:
-    image: postgres:16
-    container_name: mqtt2postgres-local-postgres
+  mqtt-subscriber:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: mqtt2postgres:local
+    container_name: mqtt2postgres-local-subscriber
+    environment:
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: postgres
+      PYTHONUNBUFFERED: "1"
+    command:
+      - --mqtt-host
+      - mqtt-broker
+      - --mqtt-port
+      - "1883"
+      - --db-host
+      - timescaledb
+      - --db-port
+      - "5432"
+      - --db-name
+      - mqtt
+      - --db-schema
+      - public
+      - --log-level
+      - INFO
+      - --route
+      - sensors/+/temp=tbl_sensor_temp
+      - --route
+      - $$SYS/broker/messages/#=tbl_broker_metrics
+    depends_on:
+      mqtt-broker:
+        condition: service_started
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: mqtt2postgres-local-timescaledb
     environment:
       POSTGRES_DB: mqtt
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
       - "55432:5432"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d mqtt && psql -U postgres -d mqtt -Atc \"SELECT to_regclass('public.tbl_sensor_temp') IS NOT NULL AND to_regclass('public.tbl_broker_metrics') IS NOT NULL\" | grep -q t",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     volumes:
       - ../sql/Target_Table.sql:/docker-entrypoint-initdb.d/10-target-table.sql:ro
       - ../sql/Target_Table2.sql:/docker-entrypoint-initdb.d/20-target-table2.sql:ro

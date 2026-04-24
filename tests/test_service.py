@@ -1,65 +1,31 @@
-from pathlib import Path
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from mqtt2postgres.config import AppConfig
-from mqtt2postgres.contracts import BrokerContract, BrokerServer, DerivedContract, PostgresServer
+from mqtt2postgres.config import AppConfig, Route
 from mqtt2postgres.service import MQTTToPostgresService, topic_matches
-
-
-def build_broker_contract() -> BrokerContract:
-    return BrokerContract(
-        path=Path("contracts/raw/broker.odcs.yaml"),
-        name="Broker Raw",
-        version="1.0.0",
-        contract_id="urn:mqtt:broker:raw",
-        server=BrokerServer(
-            name="mqtt-prod",
-            protocol="mqtt",
-            host="localhost",
-            port=1883,
-            qos=0,
-            topic_filters=("devices/+/temp", "$SYS/broker/#"),
-        ),
-        model_name="mqtt_message",
-        fields=("topic", "payload", "received_at"),
-    )
-
-
-def build_derived_contract(table_name: str, topic_filter: str) -> DerivedContract:
-    return DerivedContract(
-        path=Path(f"contracts/derived/{table_name}.odcs.yaml"),
-        name=table_name,
-        version="1.0.0",
-        contract_id=f"urn:mqtt2postgres:{table_name}",
-        server=PostgresServer(
-            name="postgres-prod",
-            host="localhost",
-            port=5432,
-            database="mqtt",
-            schema="public",
-        ),
-        table_name=table_name,
-        fields=("msg_date", "msg_topic", "msg_value"),
-        source_contract_id="urn:mqtt:broker:raw",
-        source_topic_filters=(topic_filter,),
-    )
+from mqtt2postgres.tracing import build_trace_payload
 
 
 def build_config() -> AppConfig:
     return AppConfig(
-        db_username="postgres",
-        db_password="secret",
+        mqtt_host="localhost",
+        mqtt_port=1883,
         mqtt_username=None,
         mqtt_password=None,
         mqtt_client_id="mqtt2postgres",
+        mqtt_qos=0,
+        db_host="localhost",
+        db_port=5432,
+        db_name="mqtt",
+        db_schema="public",
+        db_username="postgres",
+        db_password="secret",
+        routes=(
+            Route(topic_filter="devices/+/temp", table_name="tbl_temp"),
+            Route(topic_filter="$SYS/broker/#", table_name="tbl_sys"),
+        ),
         log_format="json",
         log_level="INFO",
-        config_snapshot_path=Path("/tmp/mqtt2postgres-snapshot.json"),
-        broker_contract=build_broker_contract(),
-        derived_contracts=(
-            build_derived_contract("tbl_temp", "devices/+/temp"),
-            build_derived_contract("tbl_sys", "$SYS/broker/#"),
-        ),
     )
 
 
@@ -77,12 +43,18 @@ class FakeWriter:
         self.closed = False
         self.calls: list[dict] = []
 
-    def insert_message(self, *, topic: str, payload: str, message_time) -> None:
+    def insert_message(self, *, topic: str, payload: str, trace=None, received_at=None):
         self.calls.append(
-            {"topic": topic, "payload": payload, "message_time": message_time}
+            {
+                "topic": topic,
+                "payload": payload,
+                "trace": trace,
+                "received_at": received_at,
+            }
         )
         if self.should_fail:
             raise RuntimeError("db write failed")
+        return {"result": "ok", "committed_at": received_at}
 
     def close(self) -> None:
         self.closed = True
@@ -113,12 +85,10 @@ def build_service(
     config = build_config()
     recorder = recorder or Recorder()
     client = client or FakeClient()
-    writers = writers or {
-        str(contract.path): FakeWriter() for contract in config.derived_contracts
-    }
+    writers = writers or {route.table_name: FakeWriter() for route in config.routes}
 
-    def writer_factory(*, contract, username, password):
-        return writers[str(contract.path)]
+    def writer_factory(*, route, config):
+        return writers[route.table_name]
 
     def mqtt_client_factory(*, config, on_connect, on_message, on_disconnect):
         client.on_connect = on_connect
@@ -170,30 +140,49 @@ def test_service_logs_unrouted_message() -> None:
 def test_service_logs_successful_database_write() -> None:
     service, recorder, writers, _ = build_service()
 
-    message = SimpleNamespace(topic="devices/node-1/temp", payload=b"42")
+    payload = build_trace_payload(
+        trace_id="trace-1",
+        event_id="event-1",
+        publisher_id="publisher-1",
+        sequence=1,
+        published_at=datetime.now(timezone.utc),
+        value=42.0,
+    )
+    message = SimpleNamespace(topic="devices/node-1/temp", payload=payload.encode("utf-8"))
     service.on_message(None, None, message)
 
-    assert writers["contracts/derived/tbl_temp.odcs.yaml"].calls[0]["payload"] == "42"
+    assert writers["tbl_temp"].calls[0]["payload"] == "42.0"
+    assert writers["tbl_temp"].calls[0]["trace"].trace_id == "trace-1"
     assert [event for event, _ in recorder.events] == [
         "message.received",
         "message.routed",
+        "db.insert_attempted",
         "db.write_succeeded",
     ]
 
 
 def test_service_logs_failed_database_write_and_continues() -> None:
     failing_writers = {
-        "contracts/derived/tbl_temp.odcs.yaml": FakeWriter(should_fail=True),
-        "contracts/derived/tbl_sys.odcs.yaml": FakeWriter(),
+        "tbl_temp": FakeWriter(should_fail=True),
+        "tbl_sys": FakeWriter(),
     }
     service, recorder, _, _ = build_service(writers=failing_writers)
 
-    message = SimpleNamespace(topic="devices/node-1/temp", payload=b"42")
+    payload = build_trace_payload(
+        trace_id="trace-1",
+        event_id="event-1",
+        publisher_id="publisher-1",
+        sequence=1,
+        published_at=datetime.now(timezone.utc),
+        value=42.0,
+    )
+    message = SimpleNamespace(topic="devices/node-1/temp", payload=payload.encode("utf-8"))
     service.on_message(None, None, message)
 
     assert [event for event, _ in recorder.events] == [
         "message.received",
         "message.routed",
+        "db.insert_attempted",
         "db.write_failed",
     ]
 

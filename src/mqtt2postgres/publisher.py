@@ -10,6 +10,8 @@ from typing import Callable, Protocol, Sequence
 import numpy as np
 from paho.mqtt import client as mqtt_client
 
+from mqtt2postgres.tracing import build_trace_payload, new_event_id, new_trace_id
+
 
 class PublisherError(ValueError):
     """Raised when publisher configuration is invalid."""
@@ -25,8 +27,10 @@ class PublisherConfig:
     frequency_seconds: float
     count: int | None
     client_id: str
+    publisher_id: str
     qos: int
     seed: int | None
+    trace_id: str | None
 
 
 class PublishResult(Protocol):
@@ -83,6 +87,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="MQTT client identifier.",
     )
     parser.add_argument(
+        "--publisher-id",
+        default=None,
+        help="Logical publisher identifier stored in the trace payload. Defaults to the client id.",
+    )
+    parser.add_argument(
         "--qos",
         type=int,
         default=0,
@@ -94,6 +103,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Optional RNG seed for reproducible values.",
+    )
+    parser.add_argument(
+        "--trace-id",
+        default=None,
+        help="Optional trace id shared by all events in this publisher run. Defaults to a generated UUID.",
     )
     return parser
 
@@ -108,8 +122,10 @@ def config_from_args(args: argparse.Namespace) -> PublisherConfig:
         frequency_seconds=args.frequency_seconds,
         count=args.count,
         client_id=args.client_id,
+        publisher_id=args.publisher_id or args.client_id,
         qos=args.qos,
         seed=args.seed,
+        trace_id=args.trace_id,
     )
     validate_config(config)
     return config
@@ -142,9 +158,18 @@ def format_payload(value: float) -> str:
     return f"{value:.6f}"
 
 
-def render_publish_message(index: int, topic: str, payload: str, timestamp: datetime) -> str:
+def render_publish_message(
+    index: int,
+    topic: str,
+    payload: str,
+    timestamp: datetime,
+    *,
+    event_id: str,
+    trace_id: str,
+) -> str:
     return (
-        f"{timestamp.isoformat()} PUBLISH index={index} topic={topic} payload={payload}"
+        f"{timestamp.isoformat()} PUBLISH index={index} topic={topic} "
+        f"event_id={event_id} trace_id={trace_id} payload={payload}"
     )
 
 
@@ -158,11 +183,22 @@ def publish_messages(
     now_fn: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
 ) -> int:
     rng = rng or create_rng(config.seed)
+    trace_id = config.trace_id or new_trace_id()
     published = 0
 
     while config.count is None or published < config.count:
         value = generate_value(config, rng)
-        payload = format_payload(value)
+        sequence = published + 1
+        published_at = now_fn()
+        event_id = new_event_id()
+        payload = build_trace_payload(
+            trace_id=trace_id,
+            event_id=event_id,
+            publisher_id=config.publisher_id,
+            sequence=sequence,
+            published_at=published_at,
+            value=value,
+        )
         result = client.publish(config.topic, payload, qos=config.qos)
         if getattr(result, "rc", mqtt_client.MQTT_ERR_SUCCESS) != mqtt_client.MQTT_ERR_SUCCESS:
             raise RuntimeError(
@@ -175,7 +211,9 @@ def publish_messages(
                 index=published,
                 topic=config.topic,
                 payload=payload,
-                timestamp=now_fn(),
+                timestamp=published_at,
+                event_id=event_id,
+                trace_id=trace_id,
             )
         )
         if config.count is not None and published >= config.count:

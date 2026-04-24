@@ -3,13 +3,7 @@ from __future__ import annotations
 import sys
 
 from mqtt2postgres.config import load_config
-from mqtt2postgres.runtime_logging import (
-    EventLogger,
-    build_config_snapshot,
-    emit_snapshot_events,
-    load_snapshot,
-    save_snapshot,
-)
+from mqtt2postgres.runtime_logging import EventLogger
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -19,89 +13,25 @@ def main(argv: list[str] | None = None) -> int:
     event_logger = EventLogger(
         log_format=config.log_format,
         log_level=config.log_level,
-        broker_contract=config.broker_contract,
     )
     event_logger.emit(
         "service.starting",
         component="service",
         message="Starting MQTT to Postgres service.",
-        broker_contract=config.broker_contract,
         status="starting",
         details={
-            "broker_contract_path": str(config.broker_contract.path),
-            "derived_contract_paths": [str(contract.path) for contract in config.derived_contracts],
-            "config_snapshot_path": str(config.config_snapshot_path),
+            "mqtt_host": config.mqtt_host,
+            "mqtt_port": config.mqtt_port,
+            "db_host": config.db_host,
+            "db_port": config.db_port,
+            "db_name": config.db_name,
+            "db_schema": config.db_schema,
+            "routes": [
+                {"topic_filter": route.topic_filter, "table_name": route.table_name}
+                for route in config.routes
+            ],
         },
     )
-
-    current_snapshot = build_config_snapshot(config.broker_contract, config.derived_contracts)
-    try:
-        previous_snapshot = load_snapshot(config.config_snapshot_path)
-    except Exception as exc:
-        previous_snapshot = None
-        event_logger.emit(
-            "config.snapshot.loaded",
-            component="config",
-            message="Failed to load the previous config snapshot.",
-            level="ERROR",
-            broker_contract=config.broker_contract,
-            status="failed",
-            details={
-                "path": str(config.config_snapshot_path),
-                "error_class": type(exc).__name__,
-                "error_message": str(exc),
-            },
-        )
-    else:
-        if previous_snapshot is None:
-            event_logger.emit(
-                "config.snapshot.missing",
-                component="config",
-                message="No previous config snapshot was found.",
-                broker_contract=config.broker_contract,
-                status="missing",
-                details={"path": str(config.config_snapshot_path)},
-            )
-        else:
-            event_logger.emit(
-                "config.snapshot.loaded",
-                component="config",
-                message="Loaded previous config snapshot.",
-                broker_contract=config.broker_contract,
-                status="loaded",
-                details={"path": str(config.config_snapshot_path)},
-            )
-    emit_snapshot_events(
-        event_logger,
-        current_snapshot=current_snapshot,
-        previous_snapshot=previous_snapshot,
-    )
-
-    try:
-        save_snapshot(config.config_snapshot_path, current_snapshot)
-    except Exception as exc:
-        event_logger.emit(
-            "config.snapshot.saved",
-            component="config",
-            message="Failed to save the current config snapshot.",
-            level="ERROR",
-            broker_contract=config.broker_contract,
-            status="failed",
-            details={
-                "path": str(config.config_snapshot_path),
-                "error_class": type(exc).__name__,
-                "error_message": str(exc),
-            },
-        )
-    else:
-        event_logger.emit(
-            "config.snapshot.saved",
-            component="config",
-            message="Saved the current config snapshot.",
-            broker_contract=config.broker_contract,
-            status="saved",
-            details={"path": str(config.config_snapshot_path)},
-        )
 
     try:
         service = MQTTToPostgresService(config, event_logger=event_logger)
@@ -111,7 +41,6 @@ def main(argv: list[str] | None = None) -> int:
             "service.stopping",
             component="service",
             message="Stopping MQTT to Postgres service.",
-            broker_contract=config.broker_contract,
             status="stopping",
             details={"reason": "keyboard_interrupt"},
         )
@@ -119,7 +48,6 @@ def main(argv: list[str] | None = None) -> int:
             "service.stopped",
             component="service",
             message="MQTT to Postgres service stopped.",
-            broker_contract=config.broker_contract,
             status="stopped",
         )
         return 0
@@ -129,7 +57,6 @@ def main(argv: list[str] | None = None) -> int:
             component="service",
             message="Stopping MQTT to Postgres service after an unrecoverable error.",
             level="ERROR",
-            broker_contract=config.broker_contract,
             status="failed",
             details={
                 "error_class": type(exc).__name__,
@@ -141,7 +68,6 @@ def main(argv: list[str] | None = None) -> int:
             component="service",
             message="MQTT to Postgres service stopped after an unrecoverable error.",
             level="ERROR",
-            broker_contract=config.broker_contract,
             status="failed",
         )
         raise
@@ -149,7 +75,6 @@ def main(argv: list[str] | None = None) -> int:
         "service.stopped",
         component="service",
         message="MQTT to Postgres service stopped.",
-        broker_contract=config.broker_contract,
         status="stopped",
     )
     return 0
