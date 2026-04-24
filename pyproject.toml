@@ -13,6 +13,7 @@ dependencies = [
   "paho-mqtt",
   "pandas",
   "psycopg2-binary",
+  "pyyaml",
   "sqlalchemy",
 ]
 
@@ -26,6 +27,6 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools_scm]
-fallback_version = "0.1.1"
+fallback_version = "0.2.0"
 version_scheme = "post-release"
 local_scheme = "no-local-version"
