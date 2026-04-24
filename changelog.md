@@ -3,8 +3,9 @@
 ## Unreleased
 
 ### Topic: Local Testing
-- Added a local Mosquitto broker config and wrapper scripts for quick MQTT development testing.
+- Added a local Mosquitto + Postgres compose stack and wrapper scripts for quick MQTT development testing.
 - Added a NumPy-based Python publisher that emits random numeric payloads to configurable MQTT topics and publish intervals.
+- Added a local smoke-test path that boots the stack, runs the ingestor, publishes sample data, and verifies inserted rows.
 
 ### Topic: Logging
 - Added structured JSON runtime logging for Docker console output with canonical service, MQTT, routing, database, and config events.

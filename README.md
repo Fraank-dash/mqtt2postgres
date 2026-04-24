@@ -118,18 +118,18 @@ python main.py \
 
 ## Local MQTT Testing
 
-For quick end-to-end testing, run a local Mosquitto broker and a synthetic publisher.
+For quick end-to-end testing, run a local Mosquitto + Postgres stack and a synthetic publisher.
 
-Start the broker in the foreground:
+Start the local stack in the foreground:
 
 ```bash
-./scripts/dev/start-local-mqtt-broker.sh
+./scripts/dev/start-local-test-stack.sh
 ```
 
-Stop it from another terminal:
+Stop the full stack and remove volumes:
 
 ```bash
-./scripts/dev/stop-local-mqtt-broker.sh
+./scripts/dev/stop-local-test-stack.sh
 ```
 
 Then run the ingestor locally in another terminal:
@@ -141,9 +141,10 @@ export DATACONTRACT_POSTGRES_PASSWORD=postgres
 python main.py \
   --log-format text \
   --log-level DEBUG \
-  --broker-contract contracts/raw/mqtt_broker.odcs.yaml \
-  --derived-contract contracts/derived/tbl_broker_metrics.odcs.yaml \
-  --derived-contract contracts/derived/tbl_sensor_temp.odcs.yaml
+  --config-snapshot-path .tmp/local-config-snapshot.json \
+  --broker-contract examples/contracts.local/raw/mqtt_broker.odcs.yaml \
+  --derived-contract examples/contracts.local/derived/tbl_broker_metrics.odcs.yaml \
+  --derived-contract examples/contracts.local/derived/tbl_sensor_temp.odcs.yaml
 ```
 
 Publish random sensor values that match the existing `sensors/+/temp` contract route:
@@ -166,6 +167,20 @@ Useful publisher options:
 - `--seed 7` makes the generated numeric sequence repeatable
 
 The publisher sends raw numeric UTF-8 payloads such as `4.271934`, not JSON.
+
+Inspect the latest ingested rows:
+
+```bash
+./scripts/dev/query-local-sensor-temp.sh
+```
+
+Run the full smoke path:
+
+```bash
+./scripts/dev/run-local-smoke-test.sh
+```
+
+The smoke script starts the local compose stack, launches the ingestor against the local contracts, publishes five sensor messages, and verifies that rows appear in `public.tbl_sensor_temp`.
 
 ## Runtime behavior
 
