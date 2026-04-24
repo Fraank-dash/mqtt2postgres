@@ -1,147 +1,163 @@
 import argparse
+from pathlib import Path
 
 import pytest
 
-from mqtt2postgres.config import ConfigError, build_argument_parser, parse_mapping, resolve_config
+from mqtt2postgres.config import ConfigError, build_argument_parser, resolve_config
 
 
-def test_parse_mapping_success() -> None:
-    mapping = parse_mapping("sensors/+/temp=tbl_temperature")
+def write_broker_contract(path: Path) -> None:
+    path.write_text(
+        """
+name: Broker Raw
+version: 1.0.0
+id: urn:mqtt:broker:raw
+servers:
+  - server: mqtt-prod
+    type: custom
+    customProperties:
+      protocol: mqtt
+      host: localhost
+      port: 1883
+      qos: 0
+      topicFilters:
+        - devices/+/temp
+models:
+  mqtt_message:
+    fields:
+      topic:
+        type: text
+      payload:
+        type: text
+      received_at:
+        type: timestamp
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
 
-    assert mapping.topic_pattern == "sensors/+/temp"
-    assert mapping.table_name == "tbl_temperature"
+
+def write_derived_contract(path: Path, source_contract_id: str = "urn:mqtt:broker:raw") -> None:
+    path.write_text(
+        f"""
+name: Temperature Aggregate
+version: 1.0.0
+id: urn:mqtt2postgres:temp
+servers:
+  - server: postgres-prod
+    type: postgres
+    host: localhost
+    port: 5432
+    database: mqtt
+    schema: public
+models:
+  tbl_temperature:
+    fields:
+      msg_date:
+        type: timestamp
+      msg_topic:
+        type: text
+      msg_value:
+        type: text
+customProperties:
+  sourceContractId: {source_contract_id}
+  sourceTopicFilters:
+    - devices/+/temp
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
-        "missing_separator",
-        "=tbl_only",
-        "topic_only=",
-    ],
-)
-def test_parse_mapping_rejects_invalid_values(value: str) -> None:
-    with pytest.raises(ConfigError):
-        parse_mapping(value)
-
-
-def test_parser_requires_mapping_argument() -> None:
+def test_parser_requires_contract_arguments() -> None:
     parser = build_argument_parser()
-
     with pytest.raises(SystemExit):
-        parser.parse_args(
-            [
-                "--db-host",
-                "db",
-                "--db-name",
-                "mqtt",
-                "--mqtt-host",
-                "broker",
-            ]
-        )
+        parser.parse_args([])
 
 
-def test_resolve_config_requires_database_password() -> None:
+def test_resolve_config_requires_database_password(tmp_path: Path) -> None:
+    broker = tmp_path / "broker.odcs.yaml"
+    derived = tmp_path / "derived.odcs.yaml"
+    write_broker_contract(broker)
+    write_derived_contract(derived)
     args = argparse.Namespace(
-        db_host="db",
-        db_port=5432,
-        db_name="mqtt",
-        db_schema="public",
-        db_user="postgres",
-        db_password=None,
-        mqtt_host="broker",
-        mqtt_port=1883,
         mqtt_user=None,
         mqtt_password=None,
         mqtt_client_id="mqtt2postgres",
-        qos=0,
-        mappings=["topic/#=tbl_mqtt"],
+        broker_contract=str(broker),
+        derived_contracts=[str(derived)],
     )
 
-    with pytest.raises(ConfigError, match="db-password"):
-        resolve_config(args, environ={})
+    with pytest.raises(ConfigError, match="DATACONTRACT_POSTGRES_PASSWORD"):
+        resolve_config(args, environ={"DATACONTRACT_POSTGRES_USERNAME": "postgres"})
 
 
-def test_resolve_config_requires_mqtt_password_if_username_is_set() -> None:
+def test_resolve_config_requires_mqtt_password_if_username_is_set(tmp_path: Path) -> None:
+    broker = tmp_path / "broker.odcs.yaml"
+    derived = tmp_path / "derived.odcs.yaml"
+    write_broker_contract(broker)
+    write_derived_contract(derived)
     args = argparse.Namespace(
-        db_host="db",
-        db_port=5432,
-        db_name="mqtt",
-        db_schema="public",
-        db_user="postgres",
-        db_password=None,
-        mqtt_host="broker",
-        mqtt_port=1883,
         mqtt_user="mqtt-user",
         mqtt_password=None,
         mqtt_client_id="mqtt2postgres",
-        qos=0,
-        mappings=["topic/#=tbl_mqtt"],
+        broker_contract=str(broker),
+        derived_contracts=[str(derived)],
     )
 
     with pytest.raises(ConfigError, match="mqtt-password"):
-        resolve_config(args, environ={"POSTGRES_PASSWORD": "secret"})
+        resolve_config(
+            args,
+            environ={
+                "DATACONTRACT_POSTGRES_USERNAME": "postgres",
+                "DATACONTRACT_POSTGRES_PASSWORD": "secret",
+            },
+        )
 
 
-def test_resolve_config_uses_environment_defaults() -> None:
+def test_resolve_config_loads_two_layer_contracts(tmp_path: Path) -> None:
+    broker = tmp_path / "broker.odcs.yaml"
+    derived = tmp_path / "derived.odcs.yaml"
+    write_broker_contract(broker)
+    write_derived_contract(derived)
     args = argparse.Namespace(
-        db_host="db",
-        db_port=5432,
-        db_name="mqtt",
-        db_schema="public",
-        db_user=None,
-        db_password=None,
-        mqtt_host="broker",
-        mqtt_port=1883,
         mqtt_user=None,
         mqtt_password=None,
         mqtt_client_id="custom-client",
-        qos=1,
-        mappings=["topic/#=tbl_mqtt", "sensors/+/temp=tbl_temp"],
+        broker_contract=str(broker),
+        derived_contracts=[str(derived)],
     )
 
     config = resolve_config(
         args,
         environ={
-            "POSTGRES_USERNAME": "postgres",
-            "POSTGRES_PASSWORD": "secret",
+            "DATACONTRACT_POSTGRES_USERNAME": "postgres",
+            "DATACONTRACT_POSTGRES_PASSWORD": "secret",
         },
     )
 
-    assert config.db_username == "postgres"
-    assert config.db_password == "secret"
-    assert len(config.mappings) == 2
-    assert config.qos == 1
+    assert config.broker_contract.server.topic_filters == ("devices/+/temp",)
+    assert config.derived_contracts[0].table_name == "tbl_temperature"
 
 
-def test_resolve_config_prefers_cli_credentials() -> None:
+def test_resolve_config_rejects_source_contract_mismatch(tmp_path: Path) -> None:
+    broker = tmp_path / "broker.odcs.yaml"
+    derived = tmp_path / "derived.odcs.yaml"
+    write_broker_contract(broker)
+    write_derived_contract(derived, source_contract_id="urn:other")
     args = argparse.Namespace(
-        db_host="db",
-        db_port=5432,
-        db_name="mqtt",
-        db_schema="public",
-        db_user="cli-user",
-        db_password="cli-password",
-        mqtt_host="broker",
-        mqtt_port=1883,
-        mqtt_user="mqtt-cli-user",
-        mqtt_password="mqtt-cli-password",
+        mqtt_user=None,
+        mqtt_password=None,
         mqtt_client_id="custom-client",
-        qos=1,
-        mappings=["topic/#=tbl_mqtt"],
+        broker_contract=str(broker),
+        derived_contracts=[str(derived)],
     )
 
-    config = resolve_config(
-        args,
-        environ={
-            "POSTGRES_USERNAME": "env-user",
-            "POSTGRES_PASSWORD": "env-password",
-            "MQTT_USERNAME": "env-mqtt-user",
-            "MQTT_PASSWORD": "env-mqtt-password",
-        },
-    )
-
-    assert config.db_username == "cli-user"
-    assert config.db_password == "cli-password"
-    assert config.mqtt_username == "mqtt-cli-user"
-    assert config.mqtt_password == "mqtt-cli-password"
+    with pytest.raises(ConfigError, match="sourceContractId"):
+        resolve_config(
+            args,
+            environ={
+                "DATACONTRACT_POSTGRES_USERNAME": "postgres",
+                "DATACONTRACT_POSTGRES_PASSWORD": "secret",
+            },
+        )

@@ -1,0 +1,28 @@
+name: Sensor Temperature Aggregate
+version: 1.0.0
+id: urn:mqtt2postgres:tbl_sensor_temp
+servers:
+  - server: postgres-prod
+    type: postgres
+    host: localhost
+    port: 5432
+    database: mqtt
+    schema: public
+models:
+  tbl_sensor_temp:
+    type: table
+    description: Trusted sensor temperature staging table.
+    fields:
+      msg_date:
+        type: timestamp
+        required: true
+      msg_topic:
+        type: text
+        required: true
+      msg_value:
+        type: text
+        required: true
+customProperties:
+  sourceContractId: urn:mqtt:broker:raw
+  sourceTopicFilters:
+    - "sensors/+/temp"

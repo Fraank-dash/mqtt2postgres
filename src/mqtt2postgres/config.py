@@ -3,7 +3,16 @@ from __future__ import annotations
 import argparse
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Mapping, Sequence
+
+from mqtt2postgres.contracts import (
+    BrokerContract,
+    ContractError,
+    DerivedContract,
+    load_broker_contract,
+    load_derived_contract,
+)
 
 
 class ConfigError(ValueError):
@@ -11,68 +20,21 @@ class ConfigError(ValueError):
 
 
 @dataclass(frozen=True)
-class TopicMapping:
-    topic_pattern: str
-    table_name: str
-
-
-@dataclass(frozen=True)
 class AppConfig:
-    db_host: str
-    db_port: int
-    db_name: str
-    db_schema: str
     db_username: str
     db_password: str
-    mqtt_host: str
-    mqtt_port: int
     mqtt_username: str | None
     mqtt_password: str | None
     mqtt_client_id: str
-    qos: int
-    mappings: tuple[TopicMapping, ...]
-
-
-def parse_mapping(raw_value: str) -> TopicMapping:
-    topic_pattern, separator, table_name = raw_value.partition("=")
-    if separator == "":
-        raise ConfigError(
-            f"Invalid mapping '{raw_value}'. Use the format <topic-pattern>=<table-name>."
-        )
-    topic_pattern = topic_pattern.strip()
-    table_name = table_name.strip()
-    if not topic_pattern or not table_name:
-        raise ConfigError(
-            f"Invalid mapping '{raw_value}'. Topic pattern and table name are required."
-        )
-    return TopicMapping(topic_pattern=topic_pattern, table_name=table_name)
+    broker_contract: BrokerContract
+    derived_contracts: tuple[DerivedContract, ...]
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mqtt2postgres",
-        description="Subscribe to MQTT topics and store messages in Postgres tables.",
+        description="Subscribe to MQTT topics from a broker contract and write messages into Postgres tables defined by ODCS derived contracts.",
     )
-    parser.add_argument("--db-host", required=True, help="Postgres host")
-    parser.add_argument("--db-port", type=int, default=5432, help="Postgres port")
-    parser.add_argument("--db-name", required=True, help="Postgres database name")
-    parser.add_argument(
-        "--db-schema",
-        default="public",
-        help="Postgres schema containing the target tables",
-    )
-    parser.add_argument(
-        "--db-user",
-        dest="db_user",
-        help="Postgres username. Falls back to POSTGRES_USERNAME.",
-    )
-    parser.add_argument(
-        "--db-password",
-        dest="db_password",
-        help="Postgres password. Falls back to POSTGRES_PASSWORD.",
-    )
-    parser.add_argument("--mqtt-host", required=True, help="MQTT broker host")
-    parser.add_argument("--mqtt-port", type=int, default=1883, help="MQTT broker port")
     parser.add_argument(
         "--mqtt-user",
         dest="mqtt_user",
@@ -89,18 +51,16 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="MQTT client identifier",
     )
     parser.add_argument(
-        "--qos",
-        type=int,
-        default=0,
-        choices=(0, 1, 2),
-        help="MQTT subscription QoS",
+        "--broker-contract",
+        required=True,
+        help="Path to the raw broker ODCS contract.",
     )
     parser.add_argument(
-        "--map",
-        dest="mappings",
+        "--derived-contract",
+        dest="derived_contracts",
         action="append",
         required=True,
-        help="Topic-to-table mapping in the format <topic-pattern>=<table-name>. Repeat for multiple mappings.",
+        help="Path to a derived Postgres ODCS contract. Repeat for multiple outputs.",
     )
     return parser
 
@@ -111,16 +71,16 @@ def resolve_config(
 ) -> AppConfig:
     env = dict(os.environ if environ is None else environ)
 
-    db_username = args.db_user or env.get("POSTGRES_USERNAME")
+    db_username = env.get("DATACONTRACT_POSTGRES_USERNAME") or env.get("POSTGRES_USERNAME")
     if not db_username:
         raise ConfigError(
-            "A Postgres username is required. Pass --db-user or set POSTGRES_USERNAME."
+            "A Postgres username is required. Set DATACONTRACT_POSTGRES_USERNAME."
         )
 
-    db_password = args.db_password or env.get("POSTGRES_PASSWORD")
+    db_password = env.get("DATACONTRACT_POSTGRES_PASSWORD") or env.get("POSTGRES_PASSWORD")
     if not db_password:
         raise ConfigError(
-            "A Postgres password is required. Pass --db-password or set POSTGRES_PASSWORD."
+            "A Postgres password is required. Set DATACONTRACT_POSTGRES_PASSWORD."
         )
 
     mqtt_username = args.mqtt_user or env.get("MQTT_USERNAME")
@@ -134,22 +94,35 @@ def resolve_config(
             "An MQTT username is required when an MQTT password is configured. Pass --mqtt-user or set MQTT_USERNAME."
         )
 
-    mappings = tuple(parse_mapping(value) for value in args.mappings)
+    try:
+        broker_contract = load_broker_contract(Path(args.broker_contract))
+    except ContractError as exc:
+        raise ConfigError(str(exc)) from exc
+
+    derived_contracts = []
+    for contract_path in args.derived_contracts:
+        try:
+            contract = load_derived_contract(Path(contract_path))
+        except ContractError as exc:
+            raise ConfigError(str(exc)) from exc
+        if (
+            contract.source_contract_id
+            and broker_contract.contract_id
+            and contract.source_contract_id != broker_contract.contract_id
+        ):
+            raise ConfigError(
+                f"Derived contract '{contract.path}' references sourceContractId '{contract.source_contract_id}', expected '{broker_contract.contract_id}'."
+            )
+        derived_contracts.append(contract)
 
     return AppConfig(
-        db_host=args.db_host,
-        db_port=args.db_port,
-        db_name=args.db_name,
-        db_schema=args.db_schema,
         db_username=db_username,
         db_password=db_password,
-        mqtt_host=args.mqtt_host,
-        mqtt_port=args.mqtt_port,
         mqtt_username=mqtt_username,
         mqtt_password=mqtt_password,
         mqtt_client_id=args.mqtt_client_id,
-        qos=args.qos,
-        mappings=mappings,
+        broker_contract=broker_contract,
+        derived_contracts=tuple(derived_contracts),
     )
 
 

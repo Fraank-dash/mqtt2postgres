@@ -7,5 +7,6 @@ dependencies:
   - pandas
   - paho-mqtt
   - psycopg2
+  - pyyaml
   - pytest
   - sqlalchemy

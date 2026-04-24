@@ -1,6 +1,8 @@
 config/config_test*
 shellyconfs/CONFIG.js
 examples/docker-run.local.sh
+examples/odcs-run.local.sh
+examples/contracts.local/
 # ---> Python
 # Byte-compiled / optimized / DLL files
 __pycache__/
