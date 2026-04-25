@@ -43,6 +43,6 @@ docker compose -f "$COMPOSE_FILE" exec -T timescaledb \
           quality_flags,
           quality_status,
           refreshed_at
-     FROM mqtt_ingest.message_15m_aggregates
+     FROM mqtt_ingest.message_24h_aggregates
  ORDER BY bucket_start DESC, device_id, metric_name, topic
     LIMIT 20;"

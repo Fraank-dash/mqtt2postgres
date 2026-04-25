@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.7.0 - 2026-04-25
+
+### Topic: Aggregation
+- Added explainable aggregate data-quality scoring with `quality_score`, quality sub-scores, and `quality_flags` distinct from the technical bucket `status`.
+- Added percentile summaries to every aggregate table: median, 25th percentile, and 75th percentile of the raw numeric values in each bucket.
+- Added statistical trust metrics to every aggregate table: sample variance, sample standard deviation, standard error, and 95% confidence bounds for the bucket mean.
+- Added interval-regularity metrics and `quality_interval_score` so retained bucket quality also reflects how evenly measurements are distributed over time.
+- Updated the shared aggregate refresh helper to compute trust metrics from the raw numeric values inside each bucket.
+- Added short SQL comments for the aggregate tables and their columns so the retained summary fields remain self-describing in the database.
+- Added a 24-hour aggregate query helper and updated the smoke test to verify trust-metric columns, populated quality scoring, and completed rated aggregate rows.
+- Added dedicated documentation for aggregate `status` and `quality`, including a Mermaid statechart and the implemented score conditions.
+
 ## 0.6.0 - 2026-04-25
 
 ### Topic: Aggregation

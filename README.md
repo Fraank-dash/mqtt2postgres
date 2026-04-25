@@ -44,7 +44,13 @@ Check 60-minute aggregates:
 ./scripts/dev/query-local-60m-aggregates.sh
 ```
 
-The local bootstrap stores raw messages in `mqtt_ingest.messages` and maintains 3-minute, 15-minute, and 60-minute aggregates in `mqtt_ingest.message_3m_aggregates`, `mqtt_ingest.message_15m_aggregates`, and `mqtt_ingest.message_60m_aggregates`, including parsed `device_id` and `metric_name` dimensions for topics shaped like `sensors/<device>/<metric>`, plain in-bucket stats, and LOCF and linear-interpolated boundary values.
+Check 24-hour aggregates:
+
+```bash
+./scripts/dev/query-local-24h-aggregates.sh
+```
+
+The local bootstrap stores raw messages in `mqtt_ingest.messages` and maintains 3-minute, 15-minute, 60-minute, and 24-hour aggregates in `mqtt_ingest.message_3m_aggregates`, `mqtt_ingest.message_15m_aggregates`, `mqtt_ingest.message_60m_aggregates`, and `mqtt_ingest.message_24h_aggregates`, including parsed `device_id` and `metric_name` dimensions for topics shaped like `sensors/<device>/<metric>`, plain in-bucket stats, percentile summaries such as median/p25/p75, trust metrics such as variance, standard error, and 95% confidence bounds, boundary-inclusive interval-regularity metrics, an explainable `quality_score`, and LOCF and linear-interpolated boundary values.
 
 The local publisher service reads `/config/publisher-config.json` from a read-only Docker volume so topic and generator setup no longer has to live in the Compose command.
 The local subscriber service does the same with `/config/subscriber-config.json` for broker, database, and topic-filter settings. A second subscriber uses `/config/subscriber-topics-config.json` to feed `mqtt_ingest.ingest_topics` and keep a topic inventory, including broker `$SYS/#` status topics.
@@ -54,6 +60,7 @@ The local subscriber service does the same with `/config/subscriber-config.json`
 - [Development runbook](docs/development-runbook.md): local stack, smoke tests, publishing, queries, cleanup, troubleshooting.
 - [Configuration](docs/configuration.md): CLI flags, environment variables, topic filters, and ingest function settings.
 - [Runtime behavior](docs/runtime-behavior.md): MQTT subscription, database-function ingest, stored aggregates, and logging events.
+- [Aggregate status and quality](docs/aggregate-status-and-quality.md): bucket lifecycle, quality scoring inputs, and Mermaid statechart.
 - [Docker usage](docs/docker.md): build/run commands and container networking notes.
 - [Versioning](docs/versioning.md): Git tag based package versions.
 

@@ -93,7 +93,13 @@ Inspect 60-minute aggregate rows:
 ./scripts/dev/query-local-60m-aggregates.sh
 ```
 
-The aggregate queries include `device_id`, `metric_name`, plain in-bucket stats, and the LOCF and linear boundary columns with their corresponding time-weighted averages.
+Inspect 24-hour aggregate rows:
+
+```bash
+./scripts/dev/query-local-24h-aggregates.sh
+```
+
+The aggregate queries include `device_id`, `metric_name`, plain in-bucket stats, percentile summaries such as median/p25/p75, trust metrics such as variance, standard error, and 95% confidence bounds, `quality_score` and its explainability fields, and the LOCF and linear boundary columns with their corresponding time-weighted averages.
 
 Inspect the topic overview table:
 
@@ -218,7 +224,7 @@ Run the full smoke path:
 ./scripts/dev/run-local-smoke-test.sh
 ```
 
-The smoke script is deterministic and separate from the continuous four-container workflow. It starts only `mqtt-broker` and `timescaledb`, runs the ingestor on the host, publishes traced messages for multiple devices under `sensors/+/temp`, and verifies rows in `mqtt_ingest.messages`, `mqtt_ingest.message_3m_aggregates`, `mqtt_ingest.message_15m_aggregates`, and `mqtt_ingest.message_60m_aggregates`.
+The smoke script is deterministic and separate from the continuous four-container workflow. It starts only `mqtt-broker` and `timescaledb`, runs the ingestor on the host, publishes traced messages for multiple devices under `sensors/+/temp`, and verifies rows in `mqtt_ingest.messages`, `mqtt_ingest.message_3m_aggregates`, `mqtt_ingest.message_15m_aggregates`, `mqtt_ingest.message_60m_aggregates`, and `mqtt_ingest.message_24h_aggregates`.
 
 If your Python executable is not `python3`, override it:
 
