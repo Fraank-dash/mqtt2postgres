@@ -91,8 +91,12 @@ class DatabaseFunctionWriter:
             received_at=received_at,
             metadata=metadata,
         )
-        result = self.connection.execute(statement)
-        self.connection.commit()
+        try:
+            result = self.connection.execute(statement)
+            self.connection.commit()
+        except Exception:
+            self.connection.rollback()
+            raise
         return {"result": result, "committed_at": committed_at}
 
     def close(self) -> None:

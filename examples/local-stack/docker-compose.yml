@@ -16,6 +16,8 @@ services:
     depends_on:
       mqtt-subscriber:
         condition: service_started
+      mqtt-subscriber-topics:
+        condition: service_started
     volumes:
       - ./publisher-config.json:/config/publisher-config.json:ro
     restart: unless-stopped
@@ -50,6 +52,28 @@ services:
       - ./subscriber-config.json:/config/subscriber-config.json:ro
     restart: unless-stopped
 
+  mqtt-subscriber-topics:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: mqtt2postgres:local
+    container_name: mqtt2postgres-local-subscriber-topics
+    environment:
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: postgres
+      PYTHONUNBUFFERED: "1"
+    command:
+      - --config
+      - /config/subscriber-topics-config.json
+    depends_on:
+      mqtt-broker:
+        condition: service_started
+      timescaledb:
+        condition: service_healthy
+    volumes:
+      - ./subscriber-topics-config.json:/config/subscriber-topics-config.json:ro
+    restart: unless-stopped
+
   timescaledb:
     image: timescale/timescaledb-ha:pg16
     container_name: mqtt2postgres-local-timescaledb
@@ -63,7 +87,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U postgres -d mqtt && psql -U postgres -d mqtt -Atc \"SELECT to_regclass('mqtt_ingest.messages') IS NOT NULL AND to_regclass('mqtt_ingest.message_3m_aggregates') IS NOT NULL AND to_regprocedure('mqtt_ingest.ingest_message(text,text,timestamp with time zone,jsonb)') IS NOT NULL\" | grep -q t",
+          "pg_isready -U postgres -d mqtt && psql -U postgres -d mqtt -Atc \"SELECT to_regclass('mqtt_ingest.messages') IS NOT NULL AND to_regclass('mqtt_ingest.message_3m_aggregates') IS NOT NULL AND to_regclass('mqtt_ingest.topic_overview') IS NOT NULL AND to_regprocedure('mqtt_ingest.ingest_message(text,text,timestamp with time zone,jsonb)') IS NOT NULL AND to_regprocedure('mqtt_ingest.ingest_topics(text,text,timestamp with time zone,jsonb)') IS NOT NULL\" | grep -q t",
         ]
       interval: 5s
       timeout: 5s

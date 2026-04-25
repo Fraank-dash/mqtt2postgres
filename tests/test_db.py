@@ -69,3 +69,34 @@ def test_database_function_writer_insert_message_returns_execute_result() -> Non
     assert result["committed_at"] is not None
     assert connection.statement is not None
     assert connection.committed is True
+
+
+def test_database_function_writer_rolls_back_on_execute_failure() -> None:
+    class ConnectionStub:
+        def __init__(self) -> None:
+            self.rolled_back = False
+
+        def execute(self, statement):
+            raise RuntimeError("boom")
+
+        def commit(self) -> None:
+            raise AssertionError("commit should not be called")
+
+        def rollback(self) -> None:
+            self.rolled_back = True
+
+    connection = ConnectionStub()
+    writer = DatabaseFunctionWriter(
+        function_name="mqtt_ingest.ingest_topics",
+        engine=object(),
+        connection=connection,
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        writer.insert_message(
+            topic="sensors/node-1/temp",
+            payload="42",
+            metadata={"topic_filter": "#"},
+        )
+
+    assert connection.rolled_back is True

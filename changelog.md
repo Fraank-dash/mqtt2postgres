@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.6.0 - 2026-04-25
+
+### Topic: Aggregation
+- Added stored 15-minute and 60-minute aggregate hypertables with the same device-level boundary-aware metrics as the existing 3-minute aggregates.
+- Added stored 24-hour aggregate hypertables with the same device-level boundary-aware metrics as the shorter aggregate windows.
+- Added `mqtt_ingest.refresh_message_15m_aggregates(...)` and `mqtt_ingest.refresh_message_60m_aggregates(...)`, plus matching TimescaleDB background jobs.
+- Added `mqtt_ingest.refresh_message_24h_aggregates(...)`, plus a matching TimescaleDB background job.
+- Changed `mqtt_ingest.ingest_message(...)` to refresh the touched 3-minute, 15-minute, 60-minute, and 24-hour buckets on each message insert.
+- Added helper scripts for inspecting local 15-minute and 60-minute aggregate rows.
+- Refactored the aggregate SQL bootstrap around shared helper functions so new bucket widths no longer require duplicating the full table, refresh, and job logic.
+
+### Topic: Topic Overview
+- Added `mqtt_ingest.topic_overview` and `mqtt_ingest.ingest_topics(...)` for tracking distinct published topics, last activity, and recent trace metadata.
+- Added a second local subscriber service configured to subscribe broadly and populate the topic overview table.
+- Updated the topic-overview subscriber config to include broker `$SYS/#` status topics alongside normal application topics.
+
 ## 0.5.0 - 2026-04-25
 
 ### Topic: Database Ingest

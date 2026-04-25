@@ -14,11 +14,12 @@ The default local development workflow is the four-container Compose stack:
 docker compose -f examples/local-stack/docker-compose.yml up --build
 ```
 
-This starts the publisher, broker, subscriber, and TimescaleDB together.
+This starts the publisher, broker, both subscribers, and TimescaleDB together.
 
 The local database service uses `timescale/timescaledb-ha:pg16` so `timescaledb_toolkit` is available during bootstrap.
 The publisher service mounts `examples/local-stack/publisher-config.json` read-only and starts with `--config /config/publisher-config.json`.
 The subscriber service mounts `examples/local-stack/subscriber-config.json` read-only and starts with `--config /config/subscriber-config.json`.
+The topic-overview subscriber mounts `examples/local-stack/subscriber-topics-config.json` read-only and starts with `--config /config/subscriber-topics-config.json`.
 
 ## Run A Standalone Ingestor Container
 

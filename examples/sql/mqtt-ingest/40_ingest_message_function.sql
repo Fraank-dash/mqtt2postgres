@@ -96,5 +96,8 @@ BEGIN
     );
 
     PERFORM mqtt_ingest.refresh_message_3m_aggregates($3, $3, now());
+    PERFORM mqtt_ingest.refresh_message_15m_aggregates($3, $3, now());
+    PERFORM mqtt_ingest.refresh_message_60m_aggregates($3, $3, now());
+    PERFORM mqtt_ingest.refresh_message_24h_aggregates($3, $3, now());
 END;
 $$;

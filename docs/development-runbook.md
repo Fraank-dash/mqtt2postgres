@@ -19,6 +19,7 @@ This starts:
 - `mqtt-publisher`: publishes random traced payloads continuously from `examples/local-stack/publisher-config.json`.
 - `mqtt-broker`: local Mosquitto broker.
 - `mqtt-subscriber`: subscribes to the broker from `examples/local-stack/subscriber-config.json` and calls `mqtt_ingest.ingest_message`.
+- `mqtt-subscriber-topics`: subscribes to all broker topics from `examples/local-stack/subscriber-topics-config.json` and calls `mqtt_ingest.ingest_topics`.
 - `timescaledb`: local TimescaleDB 16 database.
 
 The local database service uses the Timescale HA Docker image so `timescaledb_toolkit` is available during bootstrap.
@@ -80,7 +81,25 @@ Inspect 3-minute aggregate rows:
 ./scripts/dev/query-local-3m-aggregates.sh
 ```
 
-The aggregate query includes `device_id`, `metric_name`, plain in-bucket stats, and the LOCF and linear boundary columns with their corresponding time-weighted averages.
+Inspect 15-minute aggregate rows:
+
+```bash
+./scripts/dev/query-local-15m-aggregates.sh
+```
+
+Inspect 60-minute aggregate rows:
+
+```bash
+./scripts/dev/query-local-60m-aggregates.sh
+```
+
+The aggregate queries include `device_id`, `metric_name`, plain in-bucket stats, and the LOCF and linear boundary columns with their corresponding time-weighted averages.
+
+Inspect the topic overview table:
+
+```bash
+./scripts/dev/query-local-topic-overview.sh
+```
 
 Direct database shell:
 
@@ -104,9 +123,11 @@ The SQL bootstrap now also enables `timescaledb_toolkit`, so the Timescale image
 
 The default `mqtt-publisher` service mounts `examples/local-stack/publisher-config.json` into the container at `/config/publisher-config.json`.
 The default `mqtt-subscriber` service mounts `examples/local-stack/subscriber-config.json` into the container at `/config/subscriber-config.json`.
+The topic-overview subscriber mounts `examples/local-stack/subscriber-topics-config.json` into the container at `/config/subscriber-topics-config.json`.
 
 Edit that JSON file to change the publisher set, topics, or generator ranges without rewriting the Compose command.
 Edit the subscriber JSON file to change broker/database settings or the topic filter list without rewriting the Compose command.
+Edit the topic-overview subscriber JSON file to change the overview ingest function or the topic filter scope without rewriting the Compose command. The default config includes both `#` and `$SYS/#` so broker status topics are recorded in `mqtt_ingest.topic_overview`.
 
 For a temporary one-off publisher command, run:
 
@@ -197,7 +218,7 @@ Run the full smoke path:
 ./scripts/dev/run-local-smoke-test.sh
 ```
 
-The smoke script is deterministic and separate from the continuous four-container workflow. It starts only `mqtt-broker` and `timescaledb`, runs the ingestor on the host, publishes traced messages for multiple devices under `sensors/+/temp`, and verifies rows in `mqtt_ingest.messages` and `mqtt_ingest.message_3m_aggregates`.
+The smoke script is deterministic and separate from the continuous four-container workflow. It starts only `mqtt-broker` and `timescaledb`, runs the ingestor on the host, publishes traced messages for multiple devices under `sensors/+/temp`, and verifies rows in `mqtt_ingest.messages`, `mqtt_ingest.message_3m_aggregates`, `mqtt_ingest.message_15m_aggregates`, and `mqtt_ingest.message_60m_aggregates`.
 
 If your Python executable is not `python3`, override it:
 
