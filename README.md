@@ -14,9 +14,9 @@ docker compose -f examples/local-stack/docker-compose.yml up --build
 
 This starts four containers:
 
-- `mqtt-publisher`: publishes random traced MQTT payloads continuously
+- `mqtt-publisher`: publishes random traced MQTT payloads continuously from a mounted JSON config
 - `mqtt-broker`: local Mosquitto broker
-- `mqtt-subscriber`: subscribes to MQTT topics and calls the database ingest function
+- `mqtt-subscriber`: subscribes to MQTT topics from a mounted JSON config and calls the database ingest function
 - `timescaledb`: local TimescaleDB 16 database
 
 Check stored rows:
@@ -31,7 +31,10 @@ Check 3-minute aggregates:
 ./scripts/dev/query-local-3m-aggregates.sh
 ```
 
-The local bootstrap stores raw messages in `mqtt_ingest.messages` and maintains 3-minute topic aggregates in `mqtt_ingest.message_3m_aggregates`, including plain in-bucket stats plus LOCF and linear-interpolated boundary values.
+The local bootstrap stores raw messages in `mqtt_ingest.messages` and maintains 3-minute aggregates in `mqtt_ingest.message_3m_aggregates`, including parsed `device_id` and `metric_name` dimensions for topics shaped like `sensors/<device>/<metric>`, plain in-bucket stats, and LOCF and linear-interpolated boundary values.
+
+The local publisher service reads `/config/publisher-config.json` from a read-only Docker volume so topic and generator setup no longer has to live in the Compose command.
+The local subscriber service does the same with `/config/subscriber-config.json` for broker, database, and topic-filter settings.
 
 ## Further Information
 

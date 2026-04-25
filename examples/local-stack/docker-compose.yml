@@ -12,15 +12,12 @@ services:
       - >
         sleep 5;
         exec python -m mqtt2postgres.publisher
-        --host mqtt-broker
-        --port 1883
-        --topic sensors/node-1/temp
-        --min-value 0
-        --max-value 10
-        --frequency-seconds 1
+        --config /config/publisher-config.json
     depends_on:
       mqtt-subscriber:
         condition: service_started
+    volumes:
+      - ./publisher-config.json:/config/publisher-config.json:ro
     restart: unless-stopped
 
   mqtt-broker:
@@ -42,27 +39,15 @@ services:
       POSTGRES_PASSWORD: postgres
       PYTHONUNBUFFERED: "1"
     command:
-      - --mqtt-host
-      - mqtt-broker
-      - --mqtt-port
-      - "1883"
-      - --db-host
-      - timescaledb
-      - --db-port
-      - "5432"
-      - --db-name
-      - mqtt
-      - --log-level
-      - INFO
-      - --topic-filter
-      - sensors/+/temp
-      - --db-ingest-function
-      - mqtt_ingest.ingest_message
+      - --config
+      - /config/subscriber-config.json
     depends_on:
       mqtt-broker:
         condition: service_started
       timescaledb:
         condition: service_healthy
+    volumes:
+      - ./subscriber-config.json:/config/subscriber-config.json:ro
     restart: unless-stopped
 
   timescaledb:

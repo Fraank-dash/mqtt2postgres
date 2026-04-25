@@ -20,13 +20,17 @@ The default local TimescaleDB bootstrap creates:
 
 The function stores every message in the generic hypertable. It keeps the raw payload, extracts a numeric value when possible, and accepts both plain numeric payloads and the traced JSON payloads emitted by the local publisher.
 
-Stored fields include topic, payload, numeric value, trace identifiers, publisher id, sequence, publish/receive/commit timestamps, and metadata JSON.
+For topics that match exactly `sensors/<device>/<metric>`, the ingest function also stores parsed `device_id` and `metric_name` columns. Non-matching topics stay in the raw table, but those parsed columns remain `NULL`.
+
+Stored fields include topic, parsed device and metric dimensions when available, payload, numeric value, trace identifiers, publisher id, sequence, publish/receive/commit timestamps, and metadata JSON.
 
 ## Aggregates
 
 The database stores 3-minute aggregates in `mqtt_ingest.message_3m_aggregates`.
 
-Buckets are aligned with TimescaleDB `time_bucket('3 minutes', received_at)`. Each row is grouped by bucket and topic and includes sample count, numeric count, average, minimum, maximum, first receive time, last receive time, explicit bucket-boundary values, boundary-aware time-weighted averages, status, and refresh time.
+Buckets are aligned with TimescaleDB `time_bucket('3 minutes', received_at)`. For parsed sensor topics, each row is grouped by bucket, `device_id`, and `metric_name`, while retaining the full topic for traceability. Rows include sample count, numeric count, average, minimum, maximum, first receive time, last receive time, explicit bucket-boundary values, boundary-aware time-weighted averages, status, and refresh time.
+
+Only topics that match exactly `sensors/<device>/<metric>` participate in device-level aggregation. A subscription such as `sensors/+/temp` therefore produces one aggregate row per 3-minute bucket per device, for example separate rows for `node-1/temp` and `node-2/temp`.
 
 Boundary-aware fields are additive; `numeric_avg` remains the plain in-bucket `AVG(numeric_value)`.
 

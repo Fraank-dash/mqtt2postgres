@@ -59,8 +59,18 @@ sleep 3
   --min-value 0 \
   --max-value 10 \
   --frequency-seconds 0.2 \
-  --count 5 \
+  --count 3 \
   --seed 7
+
+"$PYTHON_BIN" "$ROOT_DIR/examples/publish_random.local.py" \
+  --host 127.0.0.1 \
+  --port 1883 \
+  --topic sensors/node-2/temp \
+  --min-value 10 \
+  --max-value 20 \
+  --frequency-seconds 0.2 \
+  --count 2 \
+  --seed 9
 
 sleep 2
 
@@ -72,9 +82,18 @@ AGGREGATE_COUNT="$(
   docker compose -f "$COMPOSE_FILE" exec -T timescaledb \
     psql -U postgres -d mqtt -At -c "SELECT COUNT(*) FROM mqtt_ingest.message_3m_aggregates;"
 )"
+RAW_DEVICE_COUNT="$(
+  docker compose -f "$COMPOSE_FILE" exec -T timescaledb \
+    psql -U postgres -d mqtt -At -c "SELECT COUNT(DISTINCT device_id) FROM mqtt_ingest.messages WHERE metric_name = 'temp';"
+)"
+AGGREGATE_DEVICE_COUNT="$(
+  docker compose -f "$COMPOSE_FILE" exec -T timescaledb \
+    psql -U postgres -d mqtt -At -c "SELECT COUNT(DISTINCT device_id) FROM mqtt_ingest.message_3m_aggregates WHERE metric_name = 'temp';"
+)"
 
 printf 'Smoke test inserted %s rows into mqtt_ingest.messages\n' "$ROW_COUNT"
 printf 'Smoke test created %s rows in mqtt_ingest.message_3m_aggregates\n' "$AGGREGATE_COUNT"
+printf 'Smoke test observed %s raw temp devices and %s aggregated temp devices\n' "$RAW_DEVICE_COUNT" "$AGGREGATE_DEVICE_COUNT"
 
 if [ "$ROW_COUNT" -lt 5 ]; then
   printf 'Smoke test failed. Ingestor log follows:\n' >&2
@@ -84,6 +103,12 @@ fi
 
 if [ "$AGGREGATE_COUNT" -lt 1 ]; then
   printf 'Smoke test failed. No aggregate rows were created. Ingestor log follows:\n' >&2
+  cat "$APP_LOG" >&2
+  exit 1
+fi
+
+if [ "$RAW_DEVICE_COUNT" -lt 2 ] || [ "$AGGREGATE_DEVICE_COUNT" -lt 2 ]; then
+  printf 'Smoke test failed. Multi-device temp aggregation was not observed. Ingestor log follows:\n' >&2
   cat "$APP_LOG" >&2
   exit 1
 fi

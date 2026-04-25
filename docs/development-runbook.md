@@ -16,9 +16,9 @@ docker compose -f examples/local-stack/docker-compose.yml up --build
 
 This starts:
 
-- `mqtt-publisher`: publishes random traced payloads continuously to `sensors/node-1/temp`.
+- `mqtt-publisher`: publishes random traced payloads continuously from `examples/local-stack/publisher-config.json`.
 - `mqtt-broker`: local Mosquitto broker.
-- `mqtt-subscriber`: subscribes to the broker and calls `mqtt_ingest.ingest_message`.
+- `mqtt-subscriber`: subscribes to the broker from `examples/local-stack/subscriber-config.json` and calls `mqtt_ingest.ingest_message`.
 - `timescaledb`: local TimescaleDB 16 database.
 
 The local database service uses the Timescale HA Docker image so `timescaledb_toolkit` is available during bootstrap.
@@ -62,7 +62,7 @@ docker compose -f examples/local-stack/docker-compose.yml logs -f mqtt-broker
 
 ## Query Stored Data
 
-Inspect recent sensor rows:
+Inspect recent sensor rows, including parsed `device_id` and `metric_name`:
 
 ```bash
 ./scripts/dev/query-local-sensor-temp.sh
@@ -80,7 +80,7 @@ Inspect 3-minute aggregate rows:
 ./scripts/dev/query-local-3m-aggregates.sh
 ```
 
-The aggregate query includes plain in-bucket stats plus LOCF and linear boundary columns and their corresponding time-weighted averages.
+The aggregate query includes `device_id`, `metric_name`, plain in-bucket stats, and the LOCF and linear boundary columns with their corresponding time-weighted averages.
 
 Direct database shell:
 
@@ -102,16 +102,20 @@ The SQL bootstrap now also enables `timescaledb_toolkit`, so the Timescale image
 
 ## Override Publisher Settings
 
-The default `mqtt-publisher` command is defined in `examples/local-stack/docker-compose.yml`.
+The default `mqtt-publisher` service mounts `examples/local-stack/publisher-config.json` into the container at `/config/publisher-config.json`.
+The default `mqtt-subscriber` service mounts `examples/local-stack/subscriber-config.json` into the container at `/config/subscriber-config.json`.
+
+Edit that JSON file to change the publisher set, topics, or generator ranges without rewriting the Compose command.
+Edit the subscriber JSON file to change broker/database settings or the topic filter list without rewriting the Compose command.
 
 For a temporary one-off publisher command, run:
 
 ```bash
 docker compose -f examples/local-stack/docker-compose.yml run --rm mqtt-publisher \
-  'exec python -m mqtt2postgres.publisher --host mqtt-broker --port 1883 --topic sensors/node-2/temp --min-value 20 --max-value 30 --frequency-seconds 0.5'
+  'exec python -m mqtt2postgres.publisher --topic sensors/node-2/temp --min-value 20 --max-value 30 --frequency-seconds 0.5'
 ```
 
-For persistent changes, edit the `mqtt-publisher` service command in the Compose file.
+The JSON format supports multiple publisher entries, and each publisher can define multiple topics with independent generators. Each topic generates its own value stream on every publish cycle.
 
 ## Manual Host Workflow
 
@@ -137,6 +141,13 @@ Then run the ingestor locally in another terminal:
 export POSTGRES_USERNAME=postgres
 export POSTGRES_PASSWORD=postgres
 
+python main.py \
+  --config path/to/subscriber.json
+```
+
+Or configure the subscriber directly with flags:
+
+```bash
 python main.py \
   --log-format text \
   --log-level DEBUG \
@@ -173,6 +184,8 @@ Useful publisher options:
 - `--seed 7` makes generated values repeatable.
 - `--trace-id demo-trace-1` forces one shared trace id for the run.
 - `--payload-format plain` publishes raw numeric payloads instead of traced JSON.
+- `--config path/to/publisher.json` loads one JSON file containing multiple publishers and multiple topics per publisher.
+- `--config path/to/subscriber.json` loads one JSON file for one subscriber with multiple topic filters.
 
 Without `--count`, the publisher runs until stopped.
 
@@ -184,7 +197,7 @@ Run the full smoke path:
 ./scripts/dev/run-local-smoke-test.sh
 ```
 
-The smoke script is deterministic and separate from the continuous four-container workflow. It starts only `mqtt-broker` and `timescaledb`, runs the ingestor on the host, publishes five traced messages, and verifies rows in `mqtt_ingest.messages` and `mqtt_ingest.message_3m_aggregates`.
+The smoke script is deterministic and separate from the continuous four-container workflow. It starts only `mqtt-broker` and `timescaledb`, runs the ingestor on the host, publishes traced messages for multiple devices under `sensors/+/temp`, and verifies rows in `mqtt_ingest.messages` and `mqtt_ingest.message_3m_aggregates`.
 
 If your Python executable is not `python3`, override it:
 

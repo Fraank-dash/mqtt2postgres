@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-04-25
+
+### Topic: Database Ingest
+- Added parsed `device_id` and `metric_name` dimensions for raw and aggregate sensor data shaped like `sensors/<device>/<metric>`.
+- Changed the 3-minute aggregate refresh path to group and interpolate per device and metric instead of only by full topic.
+
+### Topic: Testing
+- Expanded the local smoke test to verify multi-device aggregation under `sensors/+/temp`.
+
+### Topic: Publisher
+- Added JSON-based publisher configuration support via `--config`, with one file able to define multiple publishers and multiple independently generated topics per publisher.
+- Switched the local Docker publisher service to a read-only mounted JSON config instead of embedding topic and generator arguments in the Compose command.
+
+### Topic: Subscriber
+- Added JSON-based subscriber configuration support via `--config`, with one subscriber definition able to carry multiple topic filters.
+- Switched the local Docker subscriber service to a read-only mounted JSON config instead of embedding broker, database, and topic-filter arguments in the Compose command.
+
 ## 0.4.0 - 2026-04-25
 
 ### Topic: Database Ingest

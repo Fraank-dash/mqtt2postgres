@@ -1,0 +1,18 @@
+{
+  "mqtt_host": "mqtt-broker",
+  "mqtt_port": 1883,
+  "mqtt_client_id": "mqtt2postgres",
+  "mqtt_qos": 0,
+  "db_host": "timescaledb",
+  "db_port": 5432,
+  "db_name": "mqtt",
+  "db_username": "postgres",
+  "db_password": "postgres",
+  "topic_filters": [
+    "sensors/+/temp",
+    "sensors/+/humidity"
+  ],
+  "db_ingest_function": "mqtt_ingest.ingest_message",
+  "log_level": "INFO",
+  "log_format": "json"
+}

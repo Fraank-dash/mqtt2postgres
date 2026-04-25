@@ -9,8 +9,11 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     decoded JSONB;
+    topic_segments TEXT[];
     value_text TEXT;
     parsed_numeric DOUBLE PRECISION;
+    parsed_device_id TEXT;
+    parsed_metric_name TEXT;
     parsed_event_id TEXT;
     parsed_trace_id TEXT;
     parsed_publisher_id TEXT;
@@ -44,6 +47,19 @@ BEGIN
         value_text := $2;
     END IF;
 
+    topic_segments := regexp_split_to_array($1, '/');
+    IF array_length(topic_segments, 1) = 3
+       AND topic_segments[1] = 'sensors'
+       AND topic_segments[2] <> ''
+       AND topic_segments[3] <> ''
+    THEN
+        parsed_device_id := topic_segments[2];
+        parsed_metric_name := topic_segments[3];
+    ELSE
+        parsed_device_id := NULL;
+        parsed_metric_name := NULL;
+    END IF;
+
     BEGIN
         parsed_numeric := NULLIF(value_text, '')::DOUBLE PRECISION;
     EXCEPTION WHEN others THEN
@@ -53,6 +69,8 @@ BEGIN
     INSERT INTO mqtt_ingest.messages (
         received_at,
         topic,
+        device_id,
+        metric_name,
         payload,
         numeric_value,
         event_id,
@@ -65,6 +83,8 @@ BEGIN
     VALUES (
         $3,
         $1,
+        parsed_device_id,
+        parsed_metric_name,
         $2,
         parsed_numeric,
         COALESCE(parsed_event_id, $4 ->> 'event_id'),

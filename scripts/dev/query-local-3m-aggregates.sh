@@ -9,6 +9,8 @@ docker compose -f "$COMPOSE_FILE" exec -T timescaledb \
   "SELECT bucket_start,
           bucket_end,
           topic,
+          device_id,
+          metric_name,
           sample_count,
           numeric_count,
           ROUND(numeric_avg::numeric, 6) AS numeric_avg,
@@ -23,5 +25,5 @@ docker compose -f "$COMPOSE_FILE" exec -T timescaledb \
           status,
           refreshed_at
      FROM mqtt_ingest.message_3m_aggregates
- ORDER BY bucket_start DESC, topic
+ ORDER BY bucket_start DESC, device_id, metric_name, topic
     LIMIT 20;"

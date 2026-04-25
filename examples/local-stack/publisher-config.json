@@ -1,0 +1,62 @@
+{
+  "publishers": [
+    {
+      "host": "mqtt-broker",
+      "port": 1883,
+      "client_id": "publisher-node-1",
+      "publisher_id": "node-1-sim",
+      "qos": 0,
+      "payload_format": "json",
+      "frequency_seconds": 1,
+      "topics": [
+        {
+          "topic": "sensors/node-1/temp",
+          "generator": {
+            "kind": "uniform",
+            "min_value": 0,
+            "max_value": 10,
+            "seed": 7
+          }
+        },
+        {
+          "topic": "sensors/node-1/humidity",
+          "generator": {
+            "kind": "uniform",
+            "min_value": 40,
+            "max_value": 60,
+            "seed": 8
+          }
+        }
+      ]
+    },
+    {
+      "host": "mqtt-broker",
+      "port": 1883,
+      "client_id": "publisher-node-2",
+      "publisher_id": "node-2-sim",
+      "qos": 0,
+      "payload_format": "json",
+      "frequency_seconds": 1,
+      "topics": [
+        {
+          "topic": "sensors/node-2/temp",
+          "generator": {
+            "kind": "uniform",
+            "min_value": 10,
+            "max_value": 20,
+            "seed": 9
+          }
+        },
+        {
+          "topic": "sensors/node-2/humidity",
+          "generator": {
+            "kind": "uniform",
+            "min_value": 45,
+            "max_value": 65,
+            "seed": 10
+          }
+        }
+      ]
+    }
+  ]
+}

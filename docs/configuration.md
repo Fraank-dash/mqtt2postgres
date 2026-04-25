@@ -1,6 +1,6 @@
 # Configuration
 
-The runtime is configured directly with CLI flags and environment variables. No contract files are required.
+The runtime can be configured with CLI flags, environment variables, or a JSON config file passed via `--config`.
 
 ## Required Database Credentials
 
@@ -48,6 +48,28 @@ Use one `--topic-filter TOPIC_FILTER` per MQTT subscription:
 ```
 
 MQTT wildcards follow normal MQTT topic filter rules. The Python subscriber does not map topic filters to tables anymore; it passes each message to the configured database function.
+
+## JSON Config
+
+Use `--config path/to/subscriber.json` to load one subscriber definition with multiple topic filters:
+
+```json
+{
+  "mqtt_host": "mqtt-broker",
+  "mqtt_port": 1883,
+  "db_host": "timescaledb",
+  "db_port": 5432,
+  "db_name": "mqtt",
+  "db_username": "postgres",
+  "db_password": "postgres",
+  "topic_filters": ["sensors/+/temp", "sensors/+/humidity"],
+  "db_ingest_function": "mqtt_ingest.ingest_message",
+  "log_format": "json",
+  "log_level": "INFO"
+}
+```
+
+CLI flags override values loaded from `--config`.
 
 ## Database Ingest Function
 

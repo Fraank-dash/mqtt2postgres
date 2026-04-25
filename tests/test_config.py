@@ -1,4 +1,6 @@
 import argparse
+import json
+from pathlib import Path
 
 import pytest
 
@@ -13,11 +15,12 @@ from mqtt2postgres.config import (
 
 def build_args(**overrides) -> argparse.Namespace:
     values = {
+        "config": None,
         "mqtt_host": None,
         "mqtt_port": None,
         "mqtt_user": None,
         "mqtt_password": None,
-        "mqtt_client_id": "mqtt2postgres",
+        "mqtt_client_id": None,
         "mqtt_qos": None,
         "db_host": None,
         "db_port": None,
@@ -34,10 +37,10 @@ def build_args(**overrides) -> argparse.Namespace:
     return argparse.Namespace(**values)
 
 
-def test_parser_requires_topic_filter_argument() -> None:
+def test_parser_allows_config_only_invocation() -> None:
     parser = build_argument_parser()
-    with pytest.raises(SystemExit):
-        parser.parse_args([])
+    parsed = parser.parse_args(["--config", "subscriber.json"])
+    assert parsed.config == "subscriber.json"
 
 
 def test_parse_topic_filter_rejects_empty_value() -> None:
@@ -78,6 +81,58 @@ def test_resolve_config_loads_topic_filters_and_defaults() -> None:
     assert config.db_ingest_function == DEFAULT_DB_INGEST_FUNCTION
     assert config.log_format == "json"
     assert config.log_level == "INFO"
+
+
+def test_resolve_config_loads_json_config(tmp_path: Path) -> None:
+    config_path = tmp_path / "subscriber.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "mqtt_host": "mqtt-broker",
+                "mqtt_port": 1883,
+                "mqtt_client_id": "subscriber-a",
+                "db_host": "timescaledb",
+                "db_port": 5432,
+                "db_name": "mqtt",
+                "db_schema": "public",
+                "db_username": "postgres",
+                "db_password": "secret",
+                "topic_filters": ["sensors/+/temp", "sensors/+/humidity"],
+                "db_ingest_function": "mqtt_ingest.ingest_message",
+                "log_format": "json",
+                "log_level": "INFO",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = resolve_config(build_args(config=str(config_path), topic_filter=None), environ={})
+
+    assert config.mqtt_host == "mqtt-broker"
+    assert config.mqtt_client_id == "subscriber-a"
+    assert config.topic_filters == ("sensors/+/temp", "sensors/+/humidity")
+    assert config.db_username == "postgres"
+
+
+def test_cli_topic_filters_override_json_config(tmp_path: Path) -> None:
+    config_path = tmp_path / "subscriber.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "db_username": "postgres",
+                "db_password": "secret",
+                "topic_filters": ["sensors/+/temp"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = resolve_config(
+        build_args(config=str(config_path), topic_filter=["sensors/+/humidity"]),
+        environ={},
+    )
+
+    assert config.topic_filters == ("sensors/+/humidity",)
 
 
 def test_resolve_config_uses_environment_defaults() -> None:

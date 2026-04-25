@@ -27,6 +27,8 @@ BEGIN
         bucket_start,
         bucket_end,
         topic,
+        device_id,
+        metric_name,
         sample_count,
         numeric_count,
         numeric_avg,
@@ -47,7 +49,9 @@ BEGIN
         SELECT
             time_bucket(INTERVAL '3 minutes', received_at) AS bucket_start,
             time_bucket(INTERVAL '3 minutes', received_at) + INTERVAL '3 minutes' AS bucket_end,
-            topic,
+            MIN(topic) AS topic,
+            device_id,
+            metric_name,
             COUNT(*) AS sample_count,
             COUNT(numeric_value) AS numeric_count,
             AVG(numeric_value) AS numeric_avg,
@@ -58,33 +62,60 @@ BEGIN
         FROM mqtt_ingest.messages
         WHERE received_at >= refresh_from
           AND received_at < refresh_to
-        GROUP BY time_bucket(INTERVAL '3 minutes', received_at), topic
+          AND device_id IS NOT NULL
+          AND metric_name IS NOT NULL
+        GROUP BY
+            time_bucket(INTERVAL '3 minutes', received_at),
+            device_id,
+            metric_name
     ),
     topic_scope AS (
-        SELECT DISTINCT topic
+        SELECT DISTINCT device_id, metric_name
         FROM bucket_base
     ),
     numeric_bucket_summaries AS (
         SELECT
             time_bucket(INTERVAL '3 minutes', received_at) AS bucket_start,
-            topic,
+            device_id,
+            metric_name,
             time_weight('LOCF', received_at, numeric_value) AS locf_tws,
             time_weight('Linear', received_at, numeric_value) AS linear_tws
         FROM mqtt_ingest.messages
         WHERE numeric_value IS NOT NULL
-          AND topic IN (SELECT topic FROM topic_scope)
-        GROUP BY time_bucket(INTERVAL '3 minutes', received_at), topic
+          AND device_id IS NOT NULL
+          AND metric_name IS NOT NULL
+          AND (device_id, metric_name) IN (
+              SELECT device_id, metric_name
+              FROM topic_scope
+          )
+        GROUP BY
+            time_bucket(INTERVAL '3 minutes', received_at),
+            device_id,
+            metric_name
     ),
     summary_windows AS (
         SELECT
             bucket_start,
-            topic,
+            device_id,
+            metric_name,
             locf_tws,
             linear_tws,
-            LAG(locf_tws) OVER (PARTITION BY topic ORDER BY bucket_start) AS prev_locf_tws,
-            LEAD(locf_tws) OVER (PARTITION BY topic ORDER BY bucket_start) AS next_locf_tws,
-            LAG(linear_tws) OVER (PARTITION BY topic ORDER BY bucket_start) AS prev_linear_tws,
-            LEAD(linear_tws) OVER (PARTITION BY topic ORDER BY bucket_start) AS next_linear_tws
+            LAG(locf_tws) OVER (
+                PARTITION BY device_id, metric_name
+                ORDER BY bucket_start
+            ) AS prev_locf_tws,
+            LEAD(locf_tws) OVER (
+                PARTITION BY device_id, metric_name
+                ORDER BY bucket_start
+            ) AS next_locf_tws,
+            LAG(linear_tws) OVER (
+                PARTITION BY device_id, metric_name
+                ORDER BY bucket_start
+            ) AS prev_linear_tws,
+            LEAD(linear_tws) OVER (
+                PARTITION BY device_id, metric_name
+                ORDER BY bucket_start
+            ) AS next_linear_tws
         FROM numeric_bucket_summaries
     ),
     bucket_boundaries AS (
@@ -92,6 +123,8 @@ BEGIN
             b.bucket_start,
             b.bucket_end,
             b.topic,
+            b.device_id,
+            b.metric_name,
             b.sample_count,
             b.numeric_count,
             b.numeric_avg,
@@ -111,7 +144,8 @@ BEGIN
         LEFT JOIN LATERAL (
             SELECT received_at, numeric_value
             FROM mqtt_ingest.messages
-            WHERE topic = b.topic
+            WHERE device_id = b.device_id
+              AND metric_name = b.metric_name
               AND numeric_value IS NOT NULL
               AND received_at <= b.bucket_start
             ORDER BY received_at DESC
@@ -120,7 +154,8 @@ BEGIN
         LEFT JOIN LATERAL (
             SELECT received_at, numeric_value
             FROM mqtt_ingest.messages
-            WHERE topic = b.topic
+            WHERE device_id = b.device_id
+              AND metric_name = b.metric_name
               AND numeric_value IS NOT NULL
               AND received_at >= b.bucket_start
             ORDER BY received_at ASC
@@ -129,7 +164,8 @@ BEGIN
         LEFT JOIN LATERAL (
             SELECT received_at, numeric_value
             FROM mqtt_ingest.messages
-            WHERE topic = b.topic
+            WHERE device_id = b.device_id
+              AND metric_name = b.metric_name
               AND numeric_value IS NOT NULL
               AND received_at <= b.bucket_end
             ORDER BY received_at DESC
@@ -138,7 +174,8 @@ BEGIN
         LEFT JOIN LATERAL (
             SELECT received_at, numeric_value
             FROM mqtt_ingest.messages
-            WHERE topic = b.topic
+            WHERE device_id = b.device_id
+              AND metric_name = b.metric_name
               AND numeric_value IS NOT NULL
               AND received_at >= b.bucket_end
             ORDER BY received_at ASC
@@ -150,6 +187,8 @@ BEGIN
             b.bucket_start,
             b.bucket_end,
             b.topic,
+            b.device_id,
+            b.metric_name,
             b.sample_count,
             b.numeric_count,
             b.numeric_avg,
@@ -236,12 +275,15 @@ BEGIN
         FROM bucket_boundaries b
         LEFT JOIN summary_windows sw
           ON sw.bucket_start = b.bucket_start
-         AND sw.topic = b.topic
+         AND sw.device_id = b.device_id
+         AND sw.metric_name = b.metric_name
     )
     SELECT
         bucket_start,
         bucket_end,
         topic,
+        device_id,
+        metric_name,
         sample_count,
         numeric_count,
         numeric_avg,
@@ -258,8 +300,9 @@ BEGIN
         status,
         refreshed_at
     FROM final_rows
-    ON CONFLICT (bucket_start, topic) DO UPDATE SET
+    ON CONFLICT (bucket_start, device_id, metric_name) DO UPDATE SET
         bucket_end = EXCLUDED.bucket_end,
+        topic = EXCLUDED.topic,
         sample_count = EXCLUDED.sample_count,
         numeric_count = EXCLUDED.numeric_count,
         numeric_avg = EXCLUDED.numeric_avg,

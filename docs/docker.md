@@ -17,6 +17,8 @@ docker compose -f examples/local-stack/docker-compose.yml up --build
 This starts the publisher, broker, subscriber, and TimescaleDB together.
 
 The local database service uses `timescale/timescaledb-ha:pg16` so `timescaledb_toolkit` is available during bootstrap.
+The publisher service mounts `examples/local-stack/publisher-config.json` read-only and starts with `--config /config/publisher-config.json`.
+The subscriber service mounts `examples/local-stack/subscriber-config.json` read-only and starts with `--config /config/subscriber-config.json`.
 
 ## Run A Standalone Ingestor Container
 
@@ -42,6 +44,7 @@ docker run --rm \
   --db-name mqtt \
   --mqtt-user admin \
   --mqtt-password secret \
+  --config /config/subscriber-config.json \
   --topic-filter 'sensors/+/temp' \
   --db-ingest-function mqtt_ingest.ingest_message
 ```
