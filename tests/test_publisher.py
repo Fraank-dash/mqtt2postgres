@@ -59,6 +59,7 @@ def build_config(**overrides) -> PublisherConfig:
         qos=1,
         seed=7,
         trace_id="trace-1",
+        payload_format="json",
     )
     return PublisherConfig(**(base.__dict__ | overrides))
 
@@ -109,6 +110,22 @@ def test_publish_payload_contains_trace_fields() -> None:
     assert envelope.sequence == 1
     assert envelope.event_id is not None
     assert envelope.value is not None
+
+
+def test_publish_messages_can_emit_plain_numeric_payloads() -> None:
+    client = FakeClient()
+
+    publish_messages(
+        client,
+        build_config(count=1, seed=11, payload_format="plain"),
+        sleep_fn=lambda _: None,
+        emit_line=lambda _: None,
+        now_fn=lambda: datetime(2026, 4, 24, tzinfo=timezone.utc),
+    )
+
+    payload = client.publish_calls[0][1]
+    assert payload.count(".") == 1
+    assert 0 <= float(payload) <= 10
 
 
 def test_publish_messages_respects_count_limit() -> None:
@@ -188,6 +205,7 @@ def test_config_from_args_builds_valid_config() -> None:
         qos=0,
         seed=11,
         trace_id="trace-123",
+        payload_format="json",
     )
 
     config = config_from_args(args)

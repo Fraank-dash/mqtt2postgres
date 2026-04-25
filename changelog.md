@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+## 0.4.0 - 2026-04-25
+
+### Topic: Database Ingest
+- Replaced table-specific MQTT routes with topic subscriptions that call a Postgres ingest function.
+- Added a generic TimescaleDB hypertable and `mqtt_ingest.ingest_message` bootstrap function for raw MQTT message storage.
+- Split the local TimescaleDB bootstrap SQL into ordered schema, table, function, and job files.
+- Added stored 3-minute topic aggregates with `tba` and `aggregated` status values.
+- Added bucket-boundary LOCF and linear interpolation fields plus boundary-aware time-weighted averages for stored 3-minute aggregates.
+- Added support for plain numeric publisher payloads alongside traced JSON payloads.
+
+### Topic: Local Stack
+- Switched the local TimescaleDB image to `timescale/timescaledb-ha:pg16` so `timescaledb_toolkit` is available during bootstrap.
+- Added a dedicated helper script for inspecting stored 3-minute aggregate rows.
+
+### Topic: Configuration
+- Replaced `--route TOPIC_FILTER=TABLE` with repeated `--topic-filter` flags plus `--db-ingest-function`.
+- Added `MQTT2POSTGRES_DB_INGEST_FUNCTION` as an environment fallback for the ingest function name.
+
+### Topic: Testing
+- Updated the smoke test and unit suite for ingest-function writes and stored aggregate behavior.
+
 ## 0.3.0 - 2026-04-25
 
 ### Topic: Local Testing

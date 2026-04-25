@@ -31,6 +31,7 @@ class PublisherConfig:
     qos: int
     seed: int | None
     trace_id: str | None
+    payload_format: str
 
 
 class PublishResult(Protocol):
@@ -109,6 +110,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional trace id shared by all events in this publisher run. Defaults to a generated UUID.",
     )
+    parser.add_argument(
+        "--payload-format",
+        choices=("json", "plain"),
+        default="json",
+        help="Payload format to publish. Defaults to json traced payloads.",
+    )
     return parser
 
 
@@ -126,6 +133,7 @@ def config_from_args(args: argparse.Namespace) -> PublisherConfig:
         qos=args.qos,
         seed=args.seed,
         trace_id=args.trace_id,
+        payload_format=args.payload_format,
     )
     validate_config(config)
     return config
@@ -191,14 +199,18 @@ def publish_messages(
         sequence = published + 1
         published_at = now_fn()
         event_id = new_event_id()
-        payload = build_trace_payload(
-            trace_id=trace_id,
-            event_id=event_id,
-            publisher_id=config.publisher_id,
-            sequence=sequence,
-            published_at=published_at,
-            value=value,
-        )
+        value_payload = format_payload(value)
+        if config.payload_format == "plain":
+            payload = value_payload
+        else:
+            payload = build_trace_payload(
+                trace_id=trace_id,
+                event_id=event_id,
+                publisher_id=config.publisher_id,
+                sequence=sequence,
+                published_at=published_at,
+                value=value,
+            )
         result = client.publish(config.topic, payload, qos=config.qos)
         if getattr(result, "rc", mqtt_client.MQTT_ERR_SUCCESS) != mqtt_client.MQTT_ERR_SUCCESS:
             raise RuntimeError(

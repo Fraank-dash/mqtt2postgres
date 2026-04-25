@@ -7,15 +7,11 @@ from typing import Mapping, Sequence
 
 from mqtt2postgres.runtime_logging import DEFAULT_LOG_FORMAT, DEFAULT_LOG_LEVEL
 
+DEFAULT_DB_INGEST_FUNCTION = "mqtt_ingest.ingest_message"
+
 
 class ConfigError(ValueError):
     """Raised when runtime configuration is invalid."""
-
-
-@dataclass(frozen=True)
-class Route:
-    topic_filter: str
-    table_name: str
 
 
 @dataclass(frozen=True)
@@ -32,7 +28,8 @@ class AppConfig:
     db_schema: str
     db_username: str
     db_password: str
-    routes: tuple[Route, ...]
+    topic_filters: tuple[str, ...]
+    db_ingest_function: str
     log_format: str
     log_level: str
 
@@ -40,7 +37,7 @@ class AppConfig:
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mqtt2postgres",
-        description="Subscribe to MQTT topics and write matching messages into Postgres-compatible tables.",
+        description="Subscribe to MQTT topics and pass messages to a Postgres ingest function.",
     )
     parser.add_argument("--mqtt-host", default=None, help="MQTT broker host.")
     parser.add_argument("--mqtt-port", type=int, default=None, help="MQTT broker port.")
@@ -83,11 +80,16 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Database password. Falls back to POSTGRES_PASSWORD.",
     )
     parser.add_argument(
-        "--route",
+        "--topic-filter",
         action="append",
         required=True,
-        metavar="TOPIC_FILTER=TABLE",
-        help="Route matching MQTT topics into a table. Repeat for multiple routes.",
+        metavar="TOPIC_FILTER",
+        help="MQTT topic filter to subscribe to. Repeat for multiple filters.",
+    )
+    parser.add_argument(
+        "--db-ingest-function",
+        default=None,
+        help=f"Qualified Postgres ingest function. Defaults to {DEFAULT_DB_INGEST_FUNCTION}.",
     )
     parser.add_argument(
         "--log-format",
@@ -133,9 +135,9 @@ def resolve_config(
     if not db_password:
         raise ConfigError("A database password is required. Pass --db-password or set POSTGRES_PASSWORD.")
 
-    routes = tuple(parse_route(raw_route) for raw_route in args.route)
-    if not routes:
-        raise ConfigError("At least one --route TOPIC_FILTER=TABLE mapping is required.")
+    topic_filters = tuple(parse_topic_filter(raw_filter) for raw_filter in args.topic_filter)
+    if not topic_filters:
+        raise ConfigError("At least one --topic-filter value is required.")
 
     return AppConfig(
         mqtt_host=mqtt_host,
@@ -150,23 +152,20 @@ def resolve_config(
         db_schema=args.db_schema or env.get("POSTGRES_SCHEMA") or "public",
         db_username=db_username,
         db_password=db_password,
-        routes=routes,
+        topic_filters=topic_filters,
+        db_ingest_function=args.db_ingest_function
+        or env.get("MQTT2POSTGRES_DB_INGEST_FUNCTION")
+        or DEFAULT_DB_INGEST_FUNCTION,
         log_format=args.log_format or env.get("MQTT2POSTGRES_LOG_FORMAT") or DEFAULT_LOG_FORMAT,
         log_level=args.log_level or env.get("MQTT2POSTGRES_LOG_LEVEL") or DEFAULT_LOG_LEVEL,
     )
 
 
-def parse_route(raw_route: str) -> Route:
-    topic_filter, separator, table_name = raw_route.partition("=")
-    if not separator:
-        raise ConfigError(f"Route '{raw_route}' must use TOPIC_FILTER=TABLE format.")
-    topic_filter = topic_filter.strip()
-    table_name = table_name.strip()
+def parse_topic_filter(raw_topic_filter: str) -> str:
+    topic_filter = raw_topic_filter.strip()
     if not topic_filter:
-        raise ConfigError(f"Route '{raw_route}' has an empty topic filter.")
-    if not table_name:
-        raise ConfigError(f"Route '{raw_route}' has an empty table name.")
-    return Route(topic_filter=topic_filter, table_name=table_name)
+        raise ConfigError("Topic filter must not be empty.")
+    return topic_filter
 
 
 def _int_env(env: Mapping[str, str], name: str, default: int) -> int:

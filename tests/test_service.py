@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from mqtt2postgres.config import AppConfig, Route
-from mqtt2postgres.service import MQTTToPostgresService, topic_matches
-from mqtt2postgres.tracing import build_trace_payload
+from mqtt2postgres.config import AppConfig
+from mqtt2postgres.service import MQTTToPostgresService, build_message_metadata, topic_matches
+from mqtt2postgres.tracing import build_trace_payload, parse_trace_payload
 
 
 def build_config() -> AppConfig:
@@ -20,10 +20,8 @@ def build_config() -> AppConfig:
         db_schema="public",
         db_username="postgres",
         db_password="secret",
-        routes=(
-            Route(topic_filter="devices/+/temp", table_name="tbl_temp"),
-            Route(topic_filter="$SYS/broker/#", table_name="tbl_sys"),
-        ),
+        topic_filters=("devices/+/temp", "$SYS/broker/#"),
+        db_ingest_function="mqtt_ingest.ingest_message",
         log_format="json",
         log_level="INFO",
     )
@@ -43,12 +41,12 @@ class FakeWriter:
         self.closed = False
         self.calls: list[dict] = []
 
-    def insert_message(self, *, topic: str, payload: str, trace=None, received_at=None):
+    def insert_message(self, *, topic: str, payload: str, metadata=None, received_at=None):
         self.calls.append(
             {
                 "topic": topic,
                 "payload": payload,
-                "trace": trace,
+                "metadata": metadata,
                 "received_at": received_at,
             }
         )
@@ -85,10 +83,10 @@ def build_service(
     config = build_config()
     recorder = recorder or Recorder()
     client = client or FakeClient()
-    writers = writers or {route.table_name: FakeWriter() for route in config.routes}
+    writers = writers or {"default": FakeWriter()}
 
-    def writer_factory(*, route, config):
-        return writers[route.table_name]
+    def writer_factory(*, config):
+        return writers["default"]
 
     def mqtt_client_factory(*, config, on_connect, on_message, on_disconnect):
         client.on_connect = on_connect
@@ -151,8 +149,9 @@ def test_service_logs_successful_database_write() -> None:
     message = SimpleNamespace(topic="devices/node-1/temp", payload=payload.encode("utf-8"))
     service.on_message(None, None, message)
 
-    assert writers["tbl_temp"].calls[0]["payload"] == "42.0"
-    assert writers["tbl_temp"].calls[0]["trace"].trace_id == "trace-1"
+    assert writers["default"].calls[0]["payload"] == payload
+    assert writers["default"].calls[0]["metadata"]["trace_id"] == "trace-1"
+    assert writers["default"].calls[0]["metadata"]["topic_filter"] == "devices/+/temp"
     assert [event for event, _ in recorder.events] == [
         "message.received",
         "message.routed",
@@ -162,10 +161,7 @@ def test_service_logs_successful_database_write() -> None:
 
 
 def test_service_logs_failed_database_write_and_continues() -> None:
-    failing_writers = {
-        "tbl_temp": FakeWriter(should_fail=True),
-        "tbl_sys": FakeWriter(),
-    }
+    failing_writers = {"default": FakeWriter(should_fail=True)}
     service, recorder, _, _ = build_service(writers=failing_writers)
 
     payload = build_trace_payload(
@@ -193,3 +189,33 @@ def test_service_logs_disconnect() -> None:
     service.on_disconnect(None, None, 1)
 
     assert recorder.events[0][0] == "mqtt.disconnected"
+
+
+def test_build_message_metadata_includes_trace_and_mqtt_fields() -> None:
+    payload = build_trace_payload(
+        trace_id="trace-1",
+        event_id="event-1",
+        publisher_id="publisher-1",
+        sequence=1,
+        published_at=datetime(2026, 4, 24, tzinfo=timezone.utc),
+        value=42.0,
+    )
+    service, _, _, _ = build_service()
+    trace = service.matched_topic_filter("devices/node-1/temp")
+    assert trace == "devices/+/temp"
+
+    parsed = parse_trace_payload(payload)
+    message = SimpleNamespace(
+        topic="devices/node-1/temp",
+        payload=payload.encode(),
+        qos=1,
+        retain=False,
+        mid=3,
+    )
+
+    metadata = build_message_metadata(message, trace=parsed, topic_filter="devices/+/temp")
+
+    assert metadata["trace_id"] == "trace-1"
+    assert metadata["publisher_id"] == "publisher-1"
+    assert metadata["mqtt_qos"] == 1
+    assert metadata["mqtt_retain"] is False

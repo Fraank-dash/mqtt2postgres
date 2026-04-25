@@ -2,7 +2,13 @@ import argparse
 
 import pytest
 
-from mqtt2postgres.config import ConfigError, build_argument_parser, parse_route, resolve_config
+from mqtt2postgres.config import (
+    DEFAULT_DB_INGEST_FUNCTION,
+    ConfigError,
+    build_argument_parser,
+    parse_topic_filter,
+    resolve_config,
+)
 
 
 def build_args(**overrides) -> argparse.Namespace:
@@ -19,7 +25,8 @@ def build_args(**overrides) -> argparse.Namespace:
         "db_schema": None,
         "db_user": None,
         "db_password": None,
-        "route": ["devices/+/temp=tbl_temperature"],
+        "topic_filter": ["devices/+/temp"],
+        "db_ingest_function": None,
         "log_format": None,
         "log_level": None,
     }
@@ -27,15 +34,15 @@ def build_args(**overrides) -> argparse.Namespace:
     return argparse.Namespace(**values)
 
 
-def test_parser_requires_route_argument() -> None:
+def test_parser_requires_topic_filter_argument() -> None:
     parser = build_argument_parser()
     with pytest.raises(SystemExit):
         parser.parse_args([])
 
 
-def test_parse_route_requires_mapping() -> None:
-    with pytest.raises(ConfigError, match="TOPIC_FILTER=TABLE"):
-        parse_route("devices/+/temp")
+def test_parse_topic_filter_rejects_empty_value() -> None:
+    with pytest.raises(ConfigError, match="Topic filter"):
+        parse_topic_filter(" ")
 
 
 def test_resolve_config_requires_database_password() -> None:
@@ -54,7 +61,7 @@ def test_resolve_config_requires_mqtt_password_if_username_is_set() -> None:
         )
 
 
-def test_resolve_config_loads_routes_and_defaults() -> None:
+def test_resolve_config_loads_topic_filters_and_defaults() -> None:
     config = resolve_config(
         build_args(mqtt_client_id="custom-client"),
         environ={
@@ -67,8 +74,8 @@ def test_resolve_config_loads_routes_and_defaults() -> None:
     assert config.mqtt_port == 1883
     assert config.db_host == "127.0.0.1"
     assert config.db_port == 5432
-    assert config.routes[0].topic_filter == "devices/+/temp"
-    assert config.routes[0].table_name == "tbl_temperature"
+    assert config.topic_filters == ("devices/+/temp",)
+    assert config.db_ingest_function == DEFAULT_DB_INGEST_FUNCTION
     assert config.log_format == "json"
     assert config.log_level == "INFO"
 
@@ -86,6 +93,7 @@ def test_resolve_config_uses_environment_defaults() -> None:
             "MQTT_HOST": "mqtt-broker",
             "MQTT_PORT": "1883",
             "MQTT_QOS": "1",
+            "MQTT2POSTGRES_DB_INGEST_FUNCTION": "custom.ingest",
             "MQTT2POSTGRES_LOG_LEVEL": "DEBUG",
             "MQTT2POSTGRES_LOG_FORMAT": "json",
         },
@@ -94,6 +102,7 @@ def test_resolve_config_uses_environment_defaults() -> None:
     assert config.mqtt_host == "mqtt-broker"
     assert config.mqtt_qos == 1
     assert config.db_host == "timescaledb"
+    assert config.db_ingest_function == "custom.ingest"
     assert config.log_level == "DEBUG"
     assert config.log_format == "json"
 

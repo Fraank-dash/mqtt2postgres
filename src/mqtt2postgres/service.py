@@ -6,10 +6,10 @@ from typing import Callable, Protocol
 
 from paho.mqtt import client as mqtt_client
 
-from mqtt2postgres.config import AppConfig, Route
-from mqtt2postgres.db import DatabaseWriter
+from mqtt2postgres.config import AppConfig
+from mqtt2postgres.db import DatabaseFunctionWriter
 from mqtt2postgres.mqtt import create_mqtt_client
-from mqtt2postgres.tracing import parse_trace_payload
+from mqtt2postgres.tracing import TraceEnvelope, parse_trace_payload
 
 
 class EventEmitter(Protocol):
@@ -20,20 +20,13 @@ class EventEmitter(Protocol):
 class MQTTToPostgresService:
     config: AppConfig
     event_logger: EventEmitter
-    writer_factory: Callable[..., DatabaseWriter] = DatabaseWriter.from_route
+    writer_factory: Callable[..., DatabaseFunctionWriter] = DatabaseFunctionWriter.from_config
     mqtt_client_factory: Callable[..., mqtt_client.Client] = create_mqtt_client
-    writers: dict[str, DatabaseWriter] = field(init=False)
+    writer: DatabaseFunctionWriter = field(init=False)
     has_started: bool = field(init=False, default=False)
 
     def __post_init__(self) -> None:
-        self.writers = {}
-        for route in self.config.routes:
-            if route.table_name in self.writers:
-                continue
-            self.writers[route.table_name] = self.writer_factory(
-                route=route,
-                config=self.config,
-            )
+        self.writer = self.writer_factory(config=self.config)
         self.client = self.mqtt_client_factory(
             config=self.config,
             on_connect=self.on_connect,
@@ -59,13 +52,12 @@ class MQTTToPostgresService:
         try:
             self.client.loop_forever()
         finally:
-            for writer in self.writers.values():
-                writer.close()
+            self.writer.close()
 
-    def resolve_route(self, topic: str) -> Route | None:
-        for route in self.config.routes:
-            if topic_matches(route.topic_filter, topic):
-                return route
+    def matched_topic_filter(self, topic: str) -> str | None:
+        for topic_filter in self.config.topic_filters:
+            if topic_matches(topic_filter, topic):
+                return topic_filter
         return None
 
     def on_connect(self, client, userdata, flags, rc, properties=None) -> None:
@@ -88,16 +80,16 @@ class MQTTToPostgresService:
         )
 
         seen_topics: set[str] = set()
-        for route in self.config.routes:
-            if route.topic_filter in seen_topics:
+        for topic_filter in self.config.topic_filters:
+            if topic_filter in seen_topics:
                 continue
-            seen_topics.add(route.topic_filter)
-            client.subscribe(route.topic_filter, qos=self.config.mqtt_qos)
+            seen_topics.add(topic_filter)
+            client.subscribe(topic_filter, qos=self.config.mqtt_qos)
             self.event_logger.emit(
                 "mqtt.subscribed",
                 component="mqtt",
                 message="Subscribed to MQTT topic filter.",
-                topic=route.topic_filter,
+                topic=topic_filter,
                 details={"qos": self.config.mqtt_qos},
             )
 
@@ -107,7 +99,7 @@ class MQTTToPostgresService:
                 "service.started",
                 component="service",
                 message="MQTT to Postgres service started.",
-                details={"route_count": len(self.config.routes)},
+                details={"topic_filter_count": len(self.config.topic_filters)},
             )
 
     def on_message(self, client, userdata, message: mqtt_client.MQTTMessage) -> None:
@@ -129,40 +121,37 @@ class MQTTToPostgresService:
             },
         )
 
-        route = self.resolve_route(message.topic)
-        if route is None:
+        topic_filter = self.matched_topic_filter(message.topic)
+        if topic_filter is None:
             self.event_logger.emit(
                 "message.unrouted",
                 component="service",
-                message="No route matched the MQTT topic.",
+                message="No configured topic filter matched the MQTT topic.",
                 level="WARNING",
                 topic=message.topic,
                 status="unrouted",
             )
             return
 
-        writer = self.writers[route.table_name]
         self.event_logger.emit(
             "message.routed",
             component="service",
-            message="Routed MQTT message to a table.",
+            message="Matched MQTT message to a subscribed topic filter.",
             topic=message.topic,
-            table=route.table_name,
             status="routed",
             details={
                 "event_id": trace.event_id,
                 "trace_id": trace.trace_id,
                 "sequence": trace.sequence,
-                "topic_filter": route.topic_filter,
+                "topic_filter": topic_filter,
             },
         )
         received_at = datetime.now(timezone.utc)
         self.event_logger.emit(
             "db.insert_attempted",
             component="db",
-            message="Attempting to insert traced MQTT event into Postgres.",
+            message="Attempting to pass MQTT event to Postgres ingest function.",
             topic=message.topic,
-            table=route.table_name,
             status="inserting",
             details={
                 "event_id": trace.event_id,
@@ -172,10 +161,10 @@ class MQTTToPostgresService:
             },
         )
         try:
-            write_result = writer.insert_message(
+            write_result = self.writer.insert_message(
                 topic=message.topic,
-                payload=trace.value,
-                trace=trace,
+                payload=payload,
+                metadata=build_message_metadata(message, trace=trace, topic_filter=topic_filter),
                 received_at=received_at,
             )
         except Exception as exc:
@@ -185,7 +174,6 @@ class MQTTToPostgresService:
                 message="Failed to write MQTT message to Postgres.",
                 level="ERROR",
                 topic=message.topic,
-                table=route.table_name,
                 status="failed",
                 details={
                     "event_id": trace.event_id,
@@ -202,7 +190,6 @@ class MQTTToPostgresService:
             component="db",
             message="Wrote MQTT message to Postgres.",
             topic=message.topic,
-            table=route.table_name,
             status="written",
             details={
                 "payload_size": len(message.payload),
@@ -230,3 +217,24 @@ class MQTTToPostgresService:
 
 def topic_matches(topic_pattern: str, topic: str) -> bool:
     return mqtt_client.topic_matches_sub(topic_pattern, topic)
+
+
+def build_message_metadata(
+    message: mqtt_client.MQTTMessage,
+    *,
+    trace: TraceEnvelope,
+    topic_filter: str,
+) -> dict[str, object]:
+    metadata: dict[str, object] = {
+        "topic_filter": topic_filter,
+        "payload_size": len(message.payload),
+        "mqtt_qos": getattr(message, "qos", None),
+        "mqtt_retain": getattr(message, "retain", None),
+        "mqtt_mid": getattr(message, "mid", None),
+        "event_id": trace.event_id,
+        "trace_id": trace.trace_id,
+        "publisher_id": trace.publisher_id,
+        "sequence": trace.sequence,
+        "published_at": trace.published_at.isoformat() if trace.published_at else None,
+    }
+    return {key: value for key, value in metadata.items() if value is not None}

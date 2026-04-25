@@ -16,6 +16,8 @@ docker compose -f examples/local-stack/docker-compose.yml up --build
 
 This starts the publisher, broker, subscriber, and TimescaleDB together.
 
+The local database service uses `timescale/timescaledb-ha:pg16` so `timescaledb_toolkit` is available during bootstrap.
+
 ## Run A Standalone Ingestor Container
 
 Start the local infrastructure first:
@@ -38,11 +40,10 @@ docker run --rm \
   --db-host host.docker.internal \
   --db-port 55432 \
   --db-name mqtt \
-  --db-schema public \
   --mqtt-user admin \
   --mqtt-password secret \
-  --route 'sensors/+/temp=tbl_sensor_temp' \
-  --route '$SYS/broker/messages/#=tbl_broker_metrics'
+  --topic-filter 'sensors/+/temp' \
+  --db-ingest-function mqtt_ingest.ingest_message
 ```
 
 ## Container Networking

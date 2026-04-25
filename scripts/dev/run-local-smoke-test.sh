@@ -27,7 +27,7 @@ done
 until [ "$(
   docker compose -f "$COMPOSE_FILE" exec -T timescaledb \
     psql -U postgres -d mqtt -At -c \
-      "SELECT to_regclass('public.tbl_sensor_temp') IS NOT NULL AND to_regclass('public.tbl_broker_metrics') IS NOT NULL;" \
+      "SELECT to_regclass('mqtt_ingest.messages') IS NOT NULL AND to_regclass('mqtt_ingest.message_3m_aggregates') IS NOT NULL;" \
       2>/dev/null
 )" = "t" ]; do
   sleep 1
@@ -45,9 +45,8 @@ export PYTHONPATH="$ROOT_DIR/src"
   --db-host 127.0.0.1 \
   --db-port 55432 \
   --db-name mqtt \
-  --db-schema public \
-  --route 'sensors/+/temp=tbl_sensor_temp' \
-  --route '$SYS/broker/messages/#=tbl_broker_metrics' \
+  --topic-filter 'sensors/+/temp' \
+  --db-ingest-function mqtt_ingest.ingest_message \
   >"$APP_LOG" 2>&1 &
 APP_PID="$!"
 
@@ -67,13 +66,24 @@ sleep 2
 
 ROW_COUNT="$(
   docker compose -f "$COMPOSE_FILE" exec -T timescaledb \
-    psql -U postgres -d mqtt -At -c "SELECT COUNT(*) FROM public.tbl_sensor_temp;"
+    psql -U postgres -d mqtt -At -c "SELECT COUNT(*) FROM mqtt_ingest.messages;"
+)"
+AGGREGATE_COUNT="$(
+  docker compose -f "$COMPOSE_FILE" exec -T timescaledb \
+    psql -U postgres -d mqtt -At -c "SELECT COUNT(*) FROM mqtt_ingest.message_3m_aggregates;"
 )"
 
-printf 'Smoke test inserted %s rows into public.tbl_sensor_temp\n' "$ROW_COUNT"
+printf 'Smoke test inserted %s rows into mqtt_ingest.messages\n' "$ROW_COUNT"
+printf 'Smoke test created %s rows in mqtt_ingest.message_3m_aggregates\n' "$AGGREGATE_COUNT"
 
 if [ "$ROW_COUNT" -lt 5 ]; then
   printf 'Smoke test failed. Ingestor log follows:\n' >&2
+  cat "$APP_LOG" >&2
+  exit 1
+fi
+
+if [ "$AGGREGATE_COUNT" -lt 1 ]; then
+  printf 'Smoke test failed. No aggregate rows were created. Ingestor log follows:\n' >&2
   cat "$APP_LOG" >&2
   exit 1
 fi

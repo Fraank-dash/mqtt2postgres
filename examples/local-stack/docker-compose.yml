@@ -27,7 +27,7 @@ services:
     image: eclipse-mosquitto:2
     container_name: mqtt2postgres-local-broker
     ports:
-      - "1883:1883"
+      - "127.0.0.1:1883:1883"
     volumes:
       - ../mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
@@ -52,14 +52,12 @@ services:
       - "5432"
       - --db-name
       - mqtt
-      - --db-schema
-      - public
       - --log-level
       - INFO
-      - --route
-      - sensors/+/temp=tbl_sensor_temp
-      - --route
-      - $$SYS/broker/messages/#=tbl_broker_metrics
+      - --topic-filter
+      - sensors/+/temp
+      - --db-ingest-function
+      - mqtt_ingest.ingest_message
     depends_on:
       mqtt-broker:
         condition: service_started
@@ -68,24 +66,23 @@ services:
     restart: unless-stopped
 
   timescaledb:
-    image: timescale/timescaledb:latest-pg16
+    image: timescale/timescaledb-ha:pg16
     container_name: mqtt2postgres-local-timescaledb
     environment:
       POSTGRES_DB: mqtt
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "55432:5432"
+      - "127.0.0.1:55432:5432"
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U postgres -d mqtt && psql -U postgres -d mqtt -Atc \"SELECT to_regclass('public.tbl_sensor_temp') IS NOT NULL AND to_regclass('public.tbl_broker_metrics') IS NOT NULL\" | grep -q t",
+          "pg_isready -U postgres -d mqtt && psql -U postgres -d mqtt -Atc \"SELECT to_regclass('mqtt_ingest.messages') IS NOT NULL AND to_regclass('mqtt_ingest.message_3m_aggregates') IS NOT NULL AND to_regprocedure('mqtt_ingest.ingest_message(text,text,timestamp with time zone,jsonb)') IS NOT NULL\" | grep -q t",
         ]
       interval: 5s
       timeout: 5s
       retries: 12
       start_period: 10s
     volumes:
-      - ../sql/Target_Table.sql:/docker-entrypoint-initdb.d/10-target-table.sql:ro
-      - ../sql/Target_Table2.sql:/docker-entrypoint-initdb.d/20-target-table2.sql:ro
+      - ../sql/mqtt-ingest:/docker-entrypoint-initdb.d:ro

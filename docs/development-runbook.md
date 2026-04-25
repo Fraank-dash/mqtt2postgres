@@ -18,8 +18,10 @@ This starts:
 
 - `mqtt-publisher`: publishes random traced payloads continuously to `sensors/node-1/temp`.
 - `mqtt-broker`: local Mosquitto broker.
-- `mqtt-subscriber`: subscribes to the broker and writes matching messages into TimescaleDB.
+- `mqtt-subscriber`: subscribes to the broker and calls `mqtt_ingest.ingest_message`.
 - `timescaledb`: local TimescaleDB 16 database.
+
+The local database service uses the Timescale HA Docker image so `timescaledb_toolkit` is available during bootstrap.
 
 The stack exposes these host ports for manual inspection:
 
@@ -29,6 +31,8 @@ The stack exposes these host ports for manual inspection:
 - User/password: `postgres` / `postgres`
 
 The Compose service for the database is named `timescaledb`.
+
+TimescaleDB starts with one generic ingest target: `mqtt_ingest.messages`. You do not need to create per-topic tables before subscribing.
 
 ## View Logs
 
@@ -70,6 +74,14 @@ Compare publish, receive, and commit timing for the latest traced events:
 ./scripts/dev/query-local-trace-report.sh
 ```
 
+Inspect 3-minute aggregate rows:
+
+```bash
+./scripts/dev/query-local-3m-aggregates.sh
+```
+
+The aggregate query includes plain in-bucket stats plus LOCF and linear boundary columns and their corresponding time-weighted averages.
+
 Direct database shell:
 
 ```bash
@@ -86,6 +98,7 @@ Stop the stack and remove volumes:
 ```
 
 Use this after SQL bootstrap changes so TimescaleDB reinitializes the tables and hypertables.
+The SQL bootstrap now also enables `timescaledb_toolkit`, so the Timescale image must include that extension.
 
 ## Override Publisher Settings
 
@@ -132,9 +145,8 @@ python main.py \
   --db-host 127.0.0.1 \
   --db-port 55432 \
   --db-name mqtt \
-  --db-schema public \
-  --route 'sensors/+/temp=tbl_sensor_temp' \
-  --route '$SYS/broker/messages/#=tbl_broker_metrics'
+  --topic-filter 'sensors/+/temp' \
+  --db-ingest-function mqtt_ingest.ingest_message
 ```
 
 The ingestor is a long-running subscriber. Leave it running while publishing messages.
@@ -160,6 +172,7 @@ Useful publisher options:
 - `--qos 1` changes MQTT publish QoS.
 - `--seed 7` makes generated values repeatable.
 - `--trace-id demo-trace-1` forces one shared trace id for the run.
+- `--payload-format plain` publishes raw numeric payloads instead of traced JSON.
 
 Without `--count`, the publisher runs until stopped.
 
@@ -171,7 +184,7 @@ Run the full smoke path:
 ./scripts/dev/run-local-smoke-test.sh
 ```
 
-The smoke script is deterministic and separate from the continuous four-container workflow. It starts only `mqtt-broker` and `timescaledb`, runs the ingestor on the host, publishes five traced messages, and verifies rows in `public.tbl_sensor_temp`.
+The smoke script is deterministic and separate from the continuous four-container workflow. It starts only `mqtt-broker` and `timescaledb`, runs the ingestor on the host, publishes five traced messages, and verifies rows in `mqtt_ingest.messages` and `mqtt_ingest.message_3m_aggregates`.
 
 If your Python executable is not `python3`, override it:
 

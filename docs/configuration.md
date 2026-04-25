@@ -29,6 +29,7 @@ Database defaults:
 - `--db-port`: `5432`
 - `--db-name`: `mqtt`
 - `--db-schema`: `public`
+- `--db-ingest-function`: `mqtt_ingest.ingest_message`
 
 Environment variable fallbacks:
 
@@ -36,17 +37,27 @@ Environment variable fallbacks:
 - `MQTT_USERNAME`, `MQTT_PASSWORD`
 - `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_SCHEMA`
 - `POSTGRES_USERNAME`, `POSTGRES_PASSWORD`
+- `MQTT2POSTGRES_DB_INGEST_FUNCTION`
 
-## Routes
+## Topic Filters
 
-Use one `--route TOPIC_FILTER=TABLE` per target table:
+Use one `--topic-filter TOPIC_FILTER` per MQTT subscription:
 
 ```bash
---route 'sensors/+/temp=tbl_sensor_temp'
---route '$SYS/broker/messages/#=tbl_broker_metrics'
+--topic-filter 'sensors/+/temp'
 ```
 
-The first matching route wins. MQTT wildcards follow normal MQTT topic filter rules.
+MQTT wildcards follow normal MQTT topic filter rules. The Python subscriber does not map topic filters to tables anymore; it passes each message to the configured database function.
+
+## Database Ingest Function
+
+The default local function is:
+
+```bash
+--db-ingest-function mqtt_ingest.ingest_message
+```
+
+It receives the MQTT topic, raw payload text, receive timestamp, and metadata JSON. The local TimescaleDB bootstrap stores messages in `mqtt_ingest.messages`.
 
 ## Logging
 

@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Mapping
 
-from sqlalchemy import MetaData, Table, create_engine, inspect
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, Engine, URL
-from sqlalchemy.sql import Insert
+from sqlalchemy.sql.elements import TextClause
 
-from mqtt2postgres.config import AppConfig, Route
-from mqtt2postgres.tracing import TraceEnvelope
+from mqtt2postgres.config import AppConfig
 
-REQUIRED_FIELDS = frozenset({"msg_date", "msg_topic", "msg_value"})
+IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def create_database_engine(config: AppConfig) -> Engine:
@@ -26,111 +27,69 @@ def create_database_engine(config: AppConfig) -> Engine:
     return create_engine(url, future=True)
 
 
-def validate_table_columns(table_name: str, column_names: list[str] | tuple[str, ...]) -> None:
-    missing_columns = REQUIRED_FIELDS.difference(column_names)
-    if missing_columns:
-        missing = ", ".join(sorted(missing_columns))
-        raise ValueError(f"Table '{table_name}' is missing required columns: {missing}.")
-
-
-def load_table(
-    engine: Engine,
-    *,
-    table_name: str,
-    schema: str,
-    metadata: MetaData | None = None,
-    inspector=None,
-    table_factory=Table,
-) -> Table:
-    metadata = metadata or MetaData()
-    inspector = inspector or inspect(engine)
-
-    if not inspector.has_table(table_name, schema=schema):
-        raise ValueError(f"Table '{schema}.{table_name}' does not exist.")
-
-    table = table_factory(
-        table_name,
-        metadata,
-        schema=schema,
-        autoload_with=engine,
-    )
-    validate_table_columns(table_name, tuple(table.columns.keys()))
-    return table
+def quote_qualified_function_name(function_name: str) -> str:
+    parts = [part.strip() for part in function_name.split(".")]
+    if not parts or any(not part for part in parts):
+        raise ValueError("Database ingest function must not be empty.")
+    if len(parts) > 2:
+        raise ValueError("Database ingest function must be either NAME or SCHEMA.NAME.")
+    for part in parts:
+        if not IDENTIFIER_PATTERN.fullmatch(part):
+            raise ValueError(
+                "Database ingest function must contain only unquoted SQL identifiers."
+            )
+    return ".".join(f'"{part}"' for part in parts)
 
 
 @dataclass
-class DatabaseWriter:
-    route: Route
+class DatabaseFunctionWriter:
+    function_name: str
     engine: Engine
-    table: Table
     connection: Connection
 
     @classmethod
-    def from_route(
-        cls,
-        *,
-        route: Route,
-        config: AppConfig,
-    ) -> "DatabaseWriter":
+    def from_config(cls, *, config: AppConfig) -> "DatabaseFunctionWriter":
         engine = create_database_engine(config)
         connection = engine.connect()
-        table = load_table(engine=engine, table_name=route.table_name, schema=config.db_schema)
         return cls(
-            route=route,
+            function_name=config.db_ingest_function,
             engine=engine,
-            table=table,
             connection=connection,
         )
 
-    def build_insert(
+    def build_call(
         self,
+        *,
         topic: str,
         payload: str,
-        *,
-        trace: TraceEnvelope | None = None,
-        received_at: datetime | None = None,
-        committed_at: datetime | None = None,
-    ) -> Insert:
-        received_at = received_at or datetime.now(timezone.utc)
-        committed_at = committed_at or received_at
-        column_names = set(self.table.columns.keys())
-        values: dict[str, Any] = {
-            "msg_date": received_at,
-            "msg_topic": topic,
-            "msg_value": payload,
-        }
-        if trace is not None:
-            if "event_id" in column_names:
-                values["event_id"] = trace.event_id
-            if "trace_id" in column_names:
-                values["trace_id"] = trace.trace_id
-            if "publisher_id" in column_names:
-                values["publisher_id"] = trace.publisher_id
-            if "sequence" in column_names:
-                values["sequence"] = trace.sequence
-            if "published_at" in column_names:
-                values["published_at"] = trace.published_at
-            if "received_at" in column_names:
-                values["received_at"] = received_at
-            if "committed_at" in column_names:
-                values["committed_at"] = committed_at
-        return self.table.insert().values(**values)
+        received_at: datetime,
+        metadata: Mapping[str, Any],
+    ) -> TextClause:
+        quoted_function = quote_qualified_function_name(self.function_name)
+        return text(
+            f"SELECT {quoted_function}(:topic, :payload, :received_at, CAST(:metadata AS jsonb))"
+        ).bindparams(
+            topic=topic,
+            payload=payload,
+            received_at=received_at,
+            metadata=json.dumps(metadata, sort_keys=True, default=str),
+        )
 
     def insert_message(
         self,
+        *,
         topic: str,
         payload: str,
-        trace: TraceEnvelope | None = None,
+        metadata: Mapping[str, Any],
         received_at: datetime | None = None,
-    ) -> Any:
+    ) -> dict[str, Any]:
         received_at = received_at or datetime.now(timezone.utc)
         committed_at = datetime.now(timezone.utc)
-        statement = self.build_insert(
+        statement = self.build_call(
             topic=topic,
             payload=payload,
-            trace=trace,
             received_at=received_at,
-            committed_at=committed_at,
+            metadata=metadata,
         )
         result = self.connection.execute(statement)
         self.connection.commit()

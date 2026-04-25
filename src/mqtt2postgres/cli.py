@@ -26,10 +26,8 @@ def main(argv: list[str] | None = None) -> int:
             "db_port": config.db_port,
             "db_name": config.db_name,
             "db_schema": config.db_schema,
-            "routes": [
-                {"topic_filter": route.topic_filter, "table_name": route.table_name}
-                for route in config.routes
-            ],
+            "topic_filters": list(config.topic_filters),
+            "db_ingest_function": config.db_ingest_function,
         },
     )
 
