@@ -6,6 +6,8 @@ The app subscribes to every topic filter passed with `--topic-filter`.
 
 When a message arrives, the subscriber confirms that the topic still matches one configured filter and then passes the raw MQTT message to the configured database function. The Python process does not validate target tables or payload schema.
 
+See [Ingest pipeline](ingest-pipeline.md) for the subscriber-to-database flowchart and table/function overview.
+
 ## Database Ingest
 
 The default local TimescaleDB bootstrap creates:

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.7.1 - 2026-04-25
+
+### Topic: Documentation
+- Added dedicated ingest-pipeline documentation with a Mermaid flowchart showing the path from subscribers through database ingest functions into raw, topic-overview, and aggregate tables.
+
 ## 0.7.0 - 2026-04-25
 
 ### Topic: Aggregation
