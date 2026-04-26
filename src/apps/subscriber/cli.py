@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sequence
 
-from mqtt2postgres.config import ConfigError, resolve_config
+from apps.subscriber.runtime import MQTTToPostgresService
+from apps.subscriber.settings import SubscriberSettingsError, resolve_subscriber_settings
 from observability.logging import EventLogger
 
 
@@ -12,18 +14,17 @@ def build_argument_parser() -> argparse.ArgumentParser:
         prog="mqtt2postgres",
         description="Subscribe to MQTT topics and pass messages to a Postgres ingest function.",
     )
-    parser.add_argument("--config", default=None, help="Path to a JSON subscriber config file.")
+    parser.add_argument("--config", default=None, help="Path to a JSON subscriber settings file.")
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = build_argument_parser()
     args = parser.parse_args(argv)
     try:
-        config = resolve_config(config_path=args.config)
-    except ConfigError as exc:
+        config = resolve_subscriber_settings(settings_path=args.config)
+    except SubscriberSettingsError as exc:
         parser.error(str(exc))
-    from ingest.service import MQTTToPostgresService
 
     event_logger = EventLogger(
         log_format=config.log_format,

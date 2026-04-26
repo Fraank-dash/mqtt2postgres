@@ -2,7 +2,7 @@
 
 ## Subscription
 
-The app subscribes to every topic filter listed in the subscriber JSON config file.
+The app subscribes to every topic filter listed in the subscriber JSON settings file.
 
 When a message arrives, the subscriber confirms that the topic still matches one configured filter and then passes the raw MQTT message to the configured database function. The Python process does not validate target tables or payload schema.
 
@@ -113,5 +113,5 @@ Local verbose run:
 export POSTGRES_USERNAME=postgres
 export POSTGRES_PASSWORD=postgres
 
-python main.py --config path/to/subscriber.json
+python -m mqtt2postgres --config path/to/subscriber.json
 ```

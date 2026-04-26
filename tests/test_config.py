@@ -3,30 +3,29 @@ from pathlib import Path
 
 import pytest
 
-from mqtt2postgres.config import (
-    DEFAULT_DB_INGEST_FUNCTION,
-    ConfigError,
+from apps.subscriber.models import DEFAULT_DB_INGEST_FUNCTION, SubscriberSettingsError
+from apps.subscriber.settings import (
     parse_topic_filter,
-    resolve_config,
+    resolve_subscriber_settings,
 )
 
 
 def test_parse_topic_filter_rejects_empty_value() -> None:
-    with pytest.raises(ConfigError, match="Topic filter"):
+    with pytest.raises(SubscriberSettingsError, match="Topic filter"):
         parse_topic_filter(" ")
 
 
 def test_resolve_config_requires_database_password() -> None:
     config_path = Path(__file__).parent / "fixtures" / "subscriber-defaults.json"
-    with pytest.raises(ConfigError, match="database password"):
-        resolve_config(config_path=str(config_path), environ={"POSTGRES_USERNAME": "postgres"})
+    with pytest.raises(SubscriberSettingsError, match="database password"):
+        resolve_subscriber_settings(settings_path=str(config_path), environ={"POSTGRES_USERNAME": "postgres"})
 
 
 def test_resolve_config_requires_mqtt_password_if_username_is_set() -> None:
     config_path = Path(__file__).parent / "fixtures" / "subscriber-defaults.json"
-    with pytest.raises(ConfigError, match="mqtt-password"):
-        resolve_config(
-            config_path=str(config_path),
+    with pytest.raises(SubscriberSettingsError, match="mqtt-password"):
+        resolve_subscriber_settings(
+            settings_path=str(config_path),
             environ={
                 "MQTT_USERNAME": "mqtt-user",
                 "POSTGRES_USERNAME": "postgres",
@@ -37,8 +36,8 @@ def test_resolve_config_requires_mqtt_password_if_username_is_set() -> None:
 
 def test_resolve_config_loads_topic_filters_and_defaults() -> None:
     config_path = Path(__file__).parent / "fixtures" / "subscriber-defaults.json"
-    config = resolve_config(
-        config_path=str(config_path),
+    config = resolve_subscriber_settings(
+        settings_path=str(config_path),
         environ={
             "POSTGRES_USERNAME": "postgres",
             "POSTGRES_PASSWORD": "secret",
@@ -78,7 +77,7 @@ def test_resolve_config_loads_json_config(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    config = resolve_config(config_path=str(config_path), environ={})
+    config = resolve_subscriber_settings(settings_path=str(config_path), environ={})
 
     assert config.mqtt_host == "mqtt-broker"
     assert config.mqtt_client_id == "subscriber-a"
@@ -88,8 +87,8 @@ def test_resolve_config_loads_json_config(tmp_path: Path) -> None:
 
 def test_resolve_config_uses_environment_defaults() -> None:
     config_path = Path(__file__).parent / "fixtures" / "subscriber-defaults.json"
-    config = resolve_config(
-        config_path=str(config_path),
+    config = resolve_subscriber_settings(
+        settings_path=str(config_path),
         environ={
             "POSTGRES_USERNAME": "postgres",
             "POSTGRES_PASSWORD": "secret",
@@ -116,8 +115,8 @@ def test_resolve_config_uses_environment_defaults() -> None:
 
 def test_resolve_config_accepts_text_log_format() -> None:
     config_path = Path(__file__).parent / "fixtures" / "subscriber-text-log.json"
-    config = resolve_config(
-        config_path=str(config_path),
+    config = resolve_subscriber_settings(
+        settings_path=str(config_path),
         environ={
             "POSTGRES_USERNAME": "postgres",
             "POSTGRES_PASSWORD": "secret",

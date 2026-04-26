@@ -1,6 +1,11 @@
 # Configuration
 
-The runtime is configured from a JSON subscriber config file passed via `--config`, with environment variables used for defaults and secrets.
+The repo now has two app-specific settings flows:
+
+- subscriber runtime settings under `apps.subscriber`
+- publisher simulation settings under `apps.publisher`
+
+Subscriber settings are loaded from a JSON file passed via `--config`, with environment variables used for defaults and secrets.
 
 ## Required Database Credentials
 
@@ -35,13 +40,13 @@ Environment variable fallbacks:
 
 ## Topic Filters
 
-Set `topic_filters` in the JSON config file as an array of MQTT topic filters.
+Set `topic_filters` in the JSON settings file as an array of MQTT topic filters.
 
 MQTT wildcards follow normal MQTT topic filter rules. The Python subscriber does not map topic filters to tables anymore; it passes each message to the configured database function.
 
 ## JSON Config
 
-Use `--config path/to/subscriber.json` to load one subscriber definition with multiple topic filters:
+Use `--config path/to/subscriber.json` to load one subscriber settings file with multiple topic filters:
 
 ```json
 {
@@ -71,6 +76,16 @@ It receives the MQTT topic, raw payload text, receive timestamp, and metadata JS
 
 ## Logging
 
-Use `log_format` and `log_level` in the JSON config file.
+Use `log_format` and `log_level` in the JSON settings file.
 
 `json` is the default log format and works well in Docker. Use `text` for local terminal debugging.
+
+## Publisher Settings
+
+Run the publisher with either direct flags or a JSON/YAML settings file:
+
+```bash
+python -m apps.publisher --config path/to/publisher.yaml
+```
+
+Publisher settings files can describe multiple publishers and multiple topics per publisher. JSON and YAML use the same document structure.

@@ -58,8 +58,9 @@ Use the reset path after SQL bootstrap changes so the database is recreated from
 ## Simulation Model
 
 The local publisher is configured from [`examples/local-stack/publisher-config.json`](examples/local-stack/publisher-config.json).
+Publisher settings files can be JSON or YAML as long as they follow the same document structure.
 
-One config file can define:
+One settings file can define:
 
 - multiple publishers
 - multiple devices
@@ -248,7 +249,7 @@ PYTHONPATH=src mqtt2postgres-twin-config \
 ## Further Information
 
 - [Development runbook](docs/development-runbook.md): local stack, smoke tests, publishing, queries, cleanup, troubleshooting
-- [Configuration](docs/configuration.md): CLI flags, environment variables, topic filters, and ingest function settings
+- [Configuration](docs/configuration.md): subscriber settings files, publisher settings files, environment variables, topic filters, and ingest function settings
 - [Runtime behavior](docs/runtime-behavior.md): MQTT subscription, database-function ingest, stored aggregates, and logging events
 - [Ingest pipeline](docs/ingest-pipeline.md): flowchart from subscribers through database functions into raw, topic-overview, and aggregate tables
 - [Aggregate status and quality](docs/aggregate-status-and-quality.md): bucket lifecycle, quality scoring inputs, and Mermaid statechart
@@ -259,6 +260,9 @@ PYTHONPATH=src mqtt2postgres-twin-config \
 
 - `examples/local-stack/`: primary local bench and JSON configs
 - `examples/sql/`: TimescaleDB bootstrap and ingest SQL
-- `src/mqtt2postgres/`: Python runtime
+- `src/apps/`: canonical subscriber and publisher app packages
+- `src/broker/`: shared broker protocol/client helpers
+- `src/observability/`: shared logging and tracing helpers
+- `src/mqtt2postgres/`: subscriber package entrypoint and package metadata
 - `scripts/dev/`: optional helper scripts
 - `docs/`: detailed documentation

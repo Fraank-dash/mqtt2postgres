@@ -1,1 +1,1 @@
-"""Broker-facing MQTT helpers and publisher runtime modules."""
+"""Shared broker-facing MQTT helpers."""

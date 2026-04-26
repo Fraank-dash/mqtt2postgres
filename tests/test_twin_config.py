@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from mqtt2postgres.twin_config import (
+from apps.publisher.twin_config import (
     AggregateTopicRow,
     build_publisher_config_document,
     derive_frequency_seconds,

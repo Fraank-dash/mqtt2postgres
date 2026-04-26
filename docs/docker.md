@@ -18,6 +18,7 @@ This starts the publisher, broker, both subscribers, and TimescaleDB together.
 
 The local database service uses `timescale/timescaledb-ha:pg16` so `timescaledb_toolkit` is available during bootstrap.
 The publisher service mounts `examples/local-stack/publisher-config.json` read-only and starts with `--config /config/publisher-config.json`.
+Publisher `--config` accepts either JSON or YAML settings files with the same structure.
 The subscriber service mounts `examples/local-stack/subscriber-config.json` read-only and starts with `--config /config/subscriber-config.json`.
 The topic-overview subscriber mounts `examples/local-stack/subscriber-topics-config.json` read-only and starts with `--config /config/subscriber-topics-config.json`.
 

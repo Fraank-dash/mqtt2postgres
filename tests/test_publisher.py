@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from broker.publisher import (
+from apps.publisher import (
     PublisherConfig,
     PublisherError,
     PublisherTopicConfig,
@@ -80,12 +80,12 @@ def build_config(**overrides) -> PublisherConfig:
 
 
 def test_validate_config_rejects_invalid_range() -> None:
-    with pytest.raises(PublisherError, match="Minimum value"):
+    with pytest.raises(PublisherError, match="min_value"):
         validate_config(build_config(topics=(build_topic_config(min_value=10.0, max_value=1.0),)))
 
 
 def test_validate_config_rejects_non_positive_frequency() -> None:
-    with pytest.raises(PublisherError, match="frequency"):
+    with pytest.raises(PublisherError, match="frequency_seconds"):
         validate_config(build_config(frequency_seconds=0))
 
 
@@ -401,6 +401,32 @@ def test_load_publisher_configs_reads_clipped_normal_generators(tmp_path: Path) 
     assert configs[0].topics[0].stddev == 1.8
 
 
+def test_load_publisher_configs_reads_yaml(tmp_path: Path) -> None:
+    config_path = tmp_path / "publisher.yaml"
+    config_path.write_text(
+        """
+publishers:
+  - host: mqtt-broker
+    frequency_seconds: 1
+    client_id: pub-1
+    topics:
+      - topic: sensors/node-1/temp
+        generator:
+          kind: uniform
+          min_value: 0
+          max_value: 10
+          seed: 7
+""".strip(),
+        encoding="utf-8",
+    )
+
+    configs = load_publisher_configs(config_path)
+
+    assert len(configs) == 1
+    assert configs[0].client_id == "pub-1"
+    assert configs[0].topics[0].topic == "sensors/node-1/temp"
+
+
 def test_render_publish_message_contains_core_fields() -> None:
     rendered = render_publish_message(
         index=2,
@@ -421,7 +447,7 @@ def test_render_publish_message_contains_core_fields() -> None:
 
 def test_main_returns_zero_on_keyboard_interrupt(monkeypatch) -> None:
     monkeypatch.setattr(
-        "broker.publisher.cli.run_publisher",
+        "apps.publisher.cli.run_publisher",
         lambda config: (_ for _ in ()).throw(KeyboardInterrupt()),
     )
 

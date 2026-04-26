@@ -11,7 +11,7 @@ services:
     command:
       - >
         sleep 5;
-        exec python -m mqtt2postgres.publisher
+        exec python -m apps.publisher
         --config /config/publisher-config.json
     depends_on:
       mqtt-subscriber:

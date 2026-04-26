@@ -7,8 +7,7 @@ from datetime import datetime, timezone
 import numpy as np
 from paho.mqtt import client as mqtt_client
 
-from broker.publisher.config import validate_config
-from broker.publisher.models import (
+from apps.publisher.models import (
     MQTTClientProtocol,
     PublisherConfig,
     PublisherError,
@@ -16,6 +15,7 @@ from broker.publisher.models import (
     PublisherTopicConfig,
     PublisherTopicState,
 )
+from apps.publisher.settings import validate_config
 from observability.tracing import build_trace_payload, new_event_id, new_trace_id
 
 

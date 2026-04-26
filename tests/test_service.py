@@ -1,14 +1,14 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from mqtt2postgres.config import AppConfig
-from ingest.service import MQTTToPostgresService, build_message_metadata
+from apps.subscriber.models import SubscriberSettings
+from apps.subscriber.runtime import MQTTToPostgresService, build_message_metadata
+from broker.subscriber.client import topic_matches
 from observability.tracing import build_trace_payload, parse_trace_payload
-from broker.client import topic_matches
 
 
-def build_config() -> AppConfig:
-    return AppConfig(
+def build_config() -> SubscriberSettings:
+    return SubscriberSettings(
         mqtt_host="localhost",
         mqtt_port=1883,
         mqtt_username=None,

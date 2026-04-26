@@ -3,9 +3,9 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 
-from broker.publisher.config import build_argument_parser, config_from_args, load_publisher_configs
-from broker.publisher.models import PublisherError
-from broker.publisher.runtime import run_publisher, run_publishers
+from apps.publisher.models import PublisherError
+from apps.publisher.runtime import run_publisher, run_publishers
+from apps.publisher.settings import build_argument_parser, config_from_args, load_publisher_configs
 
 
 def main(argv: Sequence[str] | None = None) -> int:

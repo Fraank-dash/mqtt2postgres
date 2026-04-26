@@ -9,7 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Sequence
 
 from paho.mqtt import client as mqtt_client
 from sqlalchemy import create_engine, text
@@ -29,7 +29,7 @@ IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class TwinConfigError(ValueError):
-    """Raised when aggregate-driven publisher config generation fails."""
+    """Raised when aggregate-driven publisher settings generation fails."""
 
 
 @dataclass(frozen=True)
@@ -65,7 +65,7 @@ class LearnedTopicProfile:
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mqtt2postgres-twin-config",
-        description="Generate publisher-config.json style digital-twin publishers from aggregate tables.",
+        description="Generate publisher settings from aggregate tables.",
     )
     parser.add_argument("--db-host", default=None, help="Postgres-compatible database host.")
     parser.add_argument("--db-port", type=int, default=None, help="Postgres-compatible database port.")
@@ -94,16 +94,16 @@ def build_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Include topics even when no aggregate rows meet the default quality filters.",
     )
-    parser.add_argument("--mqtt-host", default=DEFAULT_MQTT_HOST, help="MQTT host to emit into generated config.")
-    parser.add_argument("--mqtt-port", type=int, default=DEFAULT_MQTT_PORT, help="MQTT port to emit into generated config.")
+    parser.add_argument("--mqtt-host", default=DEFAULT_MQTT_HOST, help="MQTT host to emit into generated settings.")
+    parser.add_argument("--mqtt-port", type=int, default=DEFAULT_MQTT_PORT, help="MQTT port to emit into generated settings.")
     parser.add_argument(
         "--payload-format",
         choices=("json", "plain"),
         default=DEFAULT_PAYLOAD_FORMAT,
-        help="Payload format to emit into generated config.",
+        help="Payload format to emit into generated settings.",
     )
-    parser.add_argument("--qos", type=int, choices=(0, 1, 2), default=DEFAULT_QOS, help="MQTT QoS to emit into generated config.")
-    parser.add_argument("--output", default=None, help="Optional path to write the generated publisher config JSON.")
+    parser.add_argument("--qos", type=int, choices=(0, 1, 2), default=DEFAULT_QOS, help="MQTT QoS to emit into generated settings.")
+    parser.add_argument("--output", default=None, help="Optional path to write the generated publisher settings JSON.")
     return parser
 
 
@@ -193,7 +193,6 @@ def learn_topic_profile(
         return None
 
     representative = numeric_rows[0]
-    total_numeric_count = sum(max(row.numeric_count, 0) for row in numeric_rows)
     weighted_mean = _weighted_average(
         ((row.numeric_avg, row.numeric_count) for row in numeric_rows if row.numeric_avg is not None),
     )

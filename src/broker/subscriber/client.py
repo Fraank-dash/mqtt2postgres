@@ -4,11 +4,11 @@ from collections.abc import Callable
 
 from paho.mqtt import client as mqtt_client
 
-from mqtt2postgres.config import AppConfig
+from apps.subscriber.models import SubscriberSettings
 
 
 def create_subscriber_client(
-    config: AppConfig,
+    config: SubscriberSettings,
     on_connect: Callable[..., None],
     on_message: Callable[..., None],
     on_disconnect: Callable[..., None],

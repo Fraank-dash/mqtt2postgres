@@ -1,6 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 - 2026-04-26
+
+### Topic: App Structure
+- Restructured `src/` around symmetric `apps.publisher` and `apps.subscriber` packages, each with aligned `__main__`, `cli`, `settings`, `models`, and `runtime` modules.
+- Moved aggregate-driven twin-config generation into `apps.publisher.twin_config`.
+- Kept `src/mqtt2postgres` as the subscriber package entrypoint and package metadata surface only.
+
+### Topic: Cleanup
+- Removed deprecated compatibility modules and old app-specific trees under `src/mqtt2postgres`, `src/settings`, `src/ingest`, and `src/broker/publisher`.
+- Removed the redundant repo-root `main.py` wrapper.
+- Standardized publisher startup on `python -m apps.publisher` and subscriber startup on `python -m mqtt2postgres`.
+
+### Topic: Shared Runtime
+- Kept shared MQTT subscriber helpers under `src/broker/subscriber`.
+- Kept shared logging and trace helpers under `src/observability`.
+
+### Topic: Testing
+- Repointed tests to the canonical `apps.publisher` and `apps.subscriber` modules.
+- Added a structural test to enforce the aligned publisher/subscriber app layout and smoke-import the canonical entrypoints.
+
+### Topic: Documentation
+- Updated README, Docker, configuration, runtime, and development docs to reflect the canonical app layout and commands.
 
 ## 0.8.0 - 2026-04-26
 

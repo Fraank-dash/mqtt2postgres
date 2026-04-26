@@ -144,10 +144,10 @@ For a temporary one-off publisher command, run:
 
 ```bash
 docker compose -f examples/local-stack/docker-compose.yml run --rm mqtt-publisher \
-  'exec python -m mqtt2postgres.publisher --topic sensors/node-2/temp --min-value 20 --max-value 30 --frequency-seconds 0.5'
+  'exec python -m apps.publisher --topic sensors/node-2/temp --min-value 20 --max-value 30 --frequency-seconds 0.5'
 ```
 
-The JSON format supports multiple publisher entries, and each publisher can define multiple topics with independent generators. Each topic generates its own value stream on every publish cycle.
+The JSON or YAML format supports multiple publisher entries, and each publisher can define multiple topics with independent generators. Each topic generates its own value stream on every publish cycle.
 
 ## Generate A Learned Twin Publisher Config
 
@@ -200,7 +200,7 @@ Then run the ingestor locally in another terminal:
 export POSTGRES_USERNAME=postgres
 export POSTGRES_PASSWORD=postgres
 
-python main.py \
+python -m mqtt2postgres \
   --config path/to/subscriber.json
 ```
 
@@ -228,7 +228,7 @@ Useful publisher options:
 - `--seed 7` makes generated values repeatable.
 - `--trace-id demo-trace-1` forces one shared trace id for the run.
 - `--payload-format plain` publishes raw numeric payloads instead of traced JSON.
-- `--config path/to/publisher.json` loads one JSON file containing multiple publishers and multiple topics per publisher.
+- `--config path/to/publisher.json` or `--config path/to/publisher.yaml` loads one publisher config file containing multiple publishers and multiple topics per publisher.
 - `--config path/to/subscriber.json` loads one JSON file for one subscriber with multiple topic filters.
 
 Without `--count`, the publisher runs until stopped.

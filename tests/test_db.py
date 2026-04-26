@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from mqtt2postgres.db import DatabaseFunctionWriter, quote_qualified_function_name
+from apps.subscriber.runtime import DatabaseFunctionWriter, quote_qualified_function_name
 
 
 def test_quote_qualified_function_name_quotes_schema_and_name() -> None:
