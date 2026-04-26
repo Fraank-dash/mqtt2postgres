@@ -2,8 +2,9 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from mqtt2postgres.config import AppConfig
-from mqtt2postgres.service import MQTTToPostgresService, build_message_metadata, topic_matches
-from mqtt2postgres.tracing import build_trace_payload, parse_trace_payload
+from ingest.service import MQTTToPostgresService, build_message_metadata
+from observability.tracing import build_trace_payload, parse_trace_payload
+from broker.client import topic_matches
 
 
 def build_config() -> AppConfig:

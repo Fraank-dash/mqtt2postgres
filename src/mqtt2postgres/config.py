@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import argparse
 import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Mapping
 
-from mqtt2postgres.runtime_logging import DEFAULT_LOG_FORMAT, DEFAULT_LOG_LEVEL
+from observability.logging import DEFAULT_LOG_FORMAT, DEFAULT_LOG_LEVEL
 
 DEFAULT_DB_INGEST_FUNCTION = "mqtt_ingest.ingest_message"
 
@@ -36,143 +35,62 @@ class AppConfig:
     log_level: str
 
 
-def build_argument_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="mqtt2postgres",
-        description="Subscribe to MQTT topics and pass messages to a Postgres ingest function.",
-    )
-    parser.add_argument("--config", default=None, help="Path to a JSON subscriber config file.")
-    parser.add_argument("--mqtt-host", default=None, help="MQTT broker host.")
-    parser.add_argument("--mqtt-port", type=int, default=None, help="MQTT broker port.")
-    parser.add_argument(
-        "--mqtt-user",
-        dest="mqtt_user",
-        help="MQTT username. Falls back to MQTT_USERNAME.",
-    )
-    parser.add_argument(
-        "--mqtt-password",
-        dest="mqtt_password",
-        help="MQTT password. Falls back to MQTT_PASSWORD.",
-    )
-    parser.add_argument(
-        "--mqtt-client-id",
-        default=None,
-        help="MQTT client identifier.",
-    )
-    parser.add_argument(
-        "--mqtt-qos",
-        type=int,
-        choices=(0, 1, 2),
-        default=None,
-        help="MQTT subscription QoS.",
-    )
-    parser.add_argument("--db-host", default=None, help="Postgres-compatible database host.")
-    parser.add_argument("--db-port", type=int, default=None, help="Postgres-compatible database port.")
-    parser.add_argument("--db-name", default=None, help="Database name.")
-    parser.add_argument("--db-schema", default=None, help="Database schema.")
-    parser.add_argument(
-        "--db-user",
-        dest="db_user",
-        default=None,
-        help="Database username. Falls back to POSTGRES_USERNAME.",
-    )
-    parser.add_argument(
-        "--db-password",
-        dest="db_password",
-        default=None,
-        help="Database password. Falls back to POSTGRES_PASSWORD.",
-    )
-    parser.add_argument(
-        "--topic-filter",
-        action="append",
-        metavar="TOPIC_FILTER",
-        help="MQTT topic filter to subscribe to. Repeat for multiple filters.",
-    )
-    parser.add_argument(
-        "--db-ingest-function",
-        default=None,
-        help=f"Qualified Postgres ingest function. Defaults to {DEFAULT_DB_INGEST_FUNCTION}.",
-    )
-    parser.add_argument(
-        "--log-format",
-        dest="log_format",
-        choices=("json", "text"),
-        default=None,
-        help="Runtime log format. Defaults to json.",
-    )
-    parser.add_argument(
-        "--log-level",
-        dest="log_level",
-        choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
-        default=None,
-        help="Runtime log level. Defaults to INFO.",
-    )
-    return parser
-
-
 def resolve_config(
-    args: argparse.Namespace,
+    config_path: str | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> AppConfig:
     env = dict(os.environ if environ is None else environ)
-    file_config = load_config_file(args.config) if args.config else {}
+    file_config = load_config_file(config_path) if config_path else {}
 
-    mqtt_host = args.mqtt_host or _config_text(file_config, "mqtt_host") or env.get("MQTT_HOST") or "127.0.0.1"
-    mqtt_port = (
-        args.mqtt_port
-        or _config_int(file_config, "mqtt_port")
-        or _int_env(env, "MQTT_PORT", 1883)
-    )
+    mqtt_host = _config_text(file_config, "mqtt_host") or env.get("MQTT_HOST") or "127.0.0.1"
+    mqtt_port = _config_int(file_config, "mqtt_port") or _int_env(env, "MQTT_PORT", 1883)
     mqtt_qos = (
-        args.mqtt_qos
-        if args.mqtt_qos is not None
-        else _config_int(file_config, "mqtt_qos")
+        _config_int(file_config, "mqtt_qos")
         if _config_int(file_config, "mqtt_qos") is not None
         else _int_env(env, "MQTT_QOS", 0)
     )
-    mqtt_username = args.mqtt_user or _config_text(file_config, "mqtt_username") or env.get("MQTT_USERNAME")
-    mqtt_password = args.mqtt_password or _config_text(file_config, "mqtt_password") or env.get("MQTT_PASSWORD")
+    mqtt_username = _config_text(file_config, "mqtt_username") or env.get("MQTT_USERNAME")
+    mqtt_password = _config_text(file_config, "mqtt_password") or env.get("MQTT_PASSWORD")
     if mqtt_username and not mqtt_password:
         raise ConfigError(
-            "An MQTT password is required when an MQTT username is configured. Pass --mqtt-password or set MQTT_PASSWORD."
+            "An MQTT password is required when an MQTT username is configured. Set mqtt_password in the config file or MQTT_PASSWORD."
         )
     if mqtt_password and not mqtt_username:
         raise ConfigError(
-            "An MQTT username is required when an MQTT password is configured. Pass --mqtt-user or set MQTT_USERNAME."
+            "An MQTT username is required when an MQTT password is configured. Set mqtt_username in the config file or MQTT_USERNAME."
         )
 
-    db_username = args.db_user or _config_text(file_config, "db_username") or env.get("POSTGRES_USERNAME")
+    db_username = _config_text(file_config, "db_username") or env.get("POSTGRES_USERNAME")
     if not db_username:
-        raise ConfigError("A database username is required. Pass --db-user or set POSTGRES_USERNAME.")
-    db_password = args.db_password or _config_text(file_config, "db_password") or env.get("POSTGRES_PASSWORD")
+        raise ConfigError("A database username is required. Set db_username in the config file or POSTGRES_USERNAME.")
+    db_password = _config_text(file_config, "db_password") or env.get("POSTGRES_PASSWORD")
     if not db_password:
-        raise ConfigError("A database password is required. Pass --db-password or set POSTGRES_PASSWORD.")
+        raise ConfigError("A database password is required. Set db_password in the config file or POSTGRES_PASSWORD.")
 
-    raw_topic_filters = args.topic_filter or _config_topic_filters(file_config)
+    raw_topic_filters = _config_topic_filters(file_config)
     topic_filters = tuple(parse_topic_filter(raw_filter) for raw_filter in raw_topic_filters)
     if not topic_filters:
-        raise ConfigError("At least one topic filter is required. Pass --topic-filter or provide topic_filters in --config.")
+        raise ConfigError("At least one topic filter is required. Provide topic_filters in the config file.")
 
     return AppConfig(
         mqtt_host=mqtt_host,
         mqtt_port=mqtt_port,
         mqtt_username=mqtt_username,
         mqtt_password=mqtt_password,
-        mqtt_client_id=args.mqtt_client_id or _config_text(file_config, "mqtt_client_id") or "mqtt2postgres",
+        mqtt_client_id=_config_text(file_config, "mqtt_client_id") or "mqtt2postgres",
         mqtt_qos=mqtt_qos,
-        db_host=args.db_host or _config_text(file_config, "db_host") or env.get("POSTGRES_HOST") or "127.0.0.1",
-        db_port=args.db_port or _config_int(file_config, "db_port") or _int_env(env, "POSTGRES_PORT", 5432),
-        db_name=args.db_name or _config_text(file_config, "db_name") or env.get("POSTGRES_DB") or "mqtt",
-        db_schema=args.db_schema or _config_text(file_config, "db_schema") or env.get("POSTGRES_SCHEMA") or "public",
+        db_host=_config_text(file_config, "db_host") or env.get("POSTGRES_HOST") or "127.0.0.1",
+        db_port=_config_int(file_config, "db_port") or _int_env(env, "POSTGRES_PORT", 5432),
+        db_name=_config_text(file_config, "db_name") or env.get("POSTGRES_DB") or "mqtt",
+        db_schema=_config_text(file_config, "db_schema") or env.get("POSTGRES_SCHEMA") or "public",
         db_username=db_username,
         db_password=db_password,
         topic_filters=topic_filters,
-        db_ingest_function=args.db_ingest_function
-        or _config_text(file_config, "db_ingest_function")
+        db_ingest_function=_config_text(file_config, "db_ingest_function")
         or env.get("MQTT2POSTGRES_DB_INGEST_FUNCTION")
         or DEFAULT_DB_INGEST_FUNCTION,
-        log_format=args.log_format or _config_text(file_config, "log_format") or env.get("MQTT2POSTGRES_LOG_FORMAT") or DEFAULT_LOG_FORMAT,
-        log_level=args.log_level or _config_text(file_config, "log_level") or env.get("MQTT2POSTGRES_LOG_LEVEL") or DEFAULT_LOG_LEVEL,
+        log_format=_config_text(file_config, "log_format") or env.get("MQTT2POSTGRES_LOG_FORMAT") or DEFAULT_LOG_FORMAT,
+        log_level=_config_text(file_config, "log_level") or env.get("MQTT2POSTGRES_LOG_LEVEL") or DEFAULT_LOG_LEVEL,
     )
 
 
@@ -239,15 +157,3 @@ def _int_env(env: Mapping[str, str], name: str, default: int) -> int:
         return int(raw_value)
     except ValueError as exc:
         raise ConfigError(f"{name} must be an integer.") from exc
-
-
-def load_config(
-    argv: Sequence[str] | None = None,
-    environ: Mapping[str, str] | None = None,
-) -> AppConfig:
-    parser = build_argument_parser()
-    args = parser.parse_args(argv)
-    try:
-        return resolve_config(args, environ=environ)
-    except ConfigError as exc:
-        parser.error(str(exc))

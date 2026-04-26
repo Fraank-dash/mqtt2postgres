@@ -66,6 +66,11 @@ One config file can define:
 - multiple topics per publisher
 - one independent generator per topic
 
+Supported topic generator kinds:
+
+- `uniform`
+- `clipped_normal`
+
 The default example simulates two devices:
 
 - `node-1`
@@ -77,6 +82,36 @@ And two metrics per device:
 - `humidity`
 
 This is why “simple digital twin” is a reasonable description of the current local stack, as long as it is understood as lightweight sensor and topic simulation rather than a full digital-twin platform.
+
+## Aggregate-Driven Twin Generation
+
+Retained aggregate tables can now be turned back into simulated publisher configs.
+
+Example:
+
+```bash
+PYTHONPATH=src mqtt2postgres-twin-config \
+  --db-host 127.0.0.1 \
+  --db-port 55432 \
+  --db-name mqtt \
+  --db-user postgres \
+  --db-password postgres \
+  --topic-filter 'sensors/+/temp'
+```
+
+The helper:
+
+- reads aggregate tables, defaulting to `mqtt_ingest.message_24h_aggregates`
+- filters for usable retained buckets
+- infers generator parameters and publish cadence
+- emits a full `publisher-config.json` style document
+
+The first version prefers:
+
+- `clipped_normal` when mean and spread are usable
+- `uniform` when only safe bounds can be learned
+
+This makes it possible to learn a lightweight simulated twin from retained aggregate behavior and feed it back into the local Docker bench.
 
 ## Ingestion Model
 
@@ -148,7 +183,8 @@ For most work, use Docker Compose first and the helper scripts second.
 2. Start the stack with `docker compose`.
 3. Watch container logs.
 4. Inspect tables directly with `psql` or the helper query scripts.
-5. Adjust publisher topics/generators and subscriber filters as needed.
+5. Optionally generate a learned publisher config from aggregates.
+6. Adjust publisher topics/generators and subscriber filters as needed.
 
 The `.sh` helpers are still useful, but they are now mainly convenience tools for inspection and smoke testing rather than the main product surface.
 
@@ -194,6 +230,19 @@ Optional helper scripts:
 ./scripts/dev/query-local-15m-aggregates.sh
 ./scripts/dev/query-local-60m-aggregates.sh
 ./scripts/dev/query-local-24h-aggregates.sh
+```
+
+Generate a learned publisher config from retained aggregates:
+
+```bash
+PYTHONPATH=src mqtt2postgres-twin-config \
+  --db-host 127.0.0.1 \
+  --db-port 55432 \
+  --db-name mqtt \
+  --db-user postgres \
+  --db-password postgres \
+  --topic-filter 'sensors/+/temp' \
+  --output generated-publisher-config.json
 ```
 
 ## Further Information

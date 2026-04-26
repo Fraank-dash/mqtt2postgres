@@ -1,4 +1,3 @@
-import argparse
 import json
 from pathlib import Path
 
@@ -7,40 +6,9 @@ import pytest
 from mqtt2postgres.config import (
     DEFAULT_DB_INGEST_FUNCTION,
     ConfigError,
-    build_argument_parser,
     parse_topic_filter,
     resolve_config,
 )
-
-
-def build_args(**overrides) -> argparse.Namespace:
-    values = {
-        "config": None,
-        "mqtt_host": None,
-        "mqtt_port": None,
-        "mqtt_user": None,
-        "mqtt_password": None,
-        "mqtt_client_id": None,
-        "mqtt_qos": None,
-        "db_host": None,
-        "db_port": None,
-        "db_name": None,
-        "db_schema": None,
-        "db_user": None,
-        "db_password": None,
-        "topic_filter": ["devices/+/temp"],
-        "db_ingest_function": None,
-        "log_format": None,
-        "log_level": None,
-    }
-    values.update(overrides)
-    return argparse.Namespace(**values)
-
-
-def test_parser_allows_config_only_invocation() -> None:
-    parser = build_argument_parser()
-    parsed = parser.parse_args(["--config", "subscriber.json"])
-    assert parsed.config == "subscriber.json"
 
 
 def test_parse_topic_filter_rejects_empty_value() -> None:
@@ -49,15 +17,18 @@ def test_parse_topic_filter_rejects_empty_value() -> None:
 
 
 def test_resolve_config_requires_database_password() -> None:
+    config_path = Path(__file__).parent / "fixtures" / "subscriber-defaults.json"
     with pytest.raises(ConfigError, match="database password"):
-        resolve_config(build_args(), environ={"POSTGRES_USERNAME": "postgres"})
+        resolve_config(config_path=str(config_path), environ={"POSTGRES_USERNAME": "postgres"})
 
 
 def test_resolve_config_requires_mqtt_password_if_username_is_set() -> None:
+    config_path = Path(__file__).parent / "fixtures" / "subscriber-defaults.json"
     with pytest.raises(ConfigError, match="mqtt-password"):
         resolve_config(
-            build_args(mqtt_user="mqtt-user"),
+            config_path=str(config_path),
             environ={
+                "MQTT_USERNAME": "mqtt-user",
                 "POSTGRES_USERNAME": "postgres",
                 "POSTGRES_PASSWORD": "secret",
             },
@@ -65,8 +36,9 @@ def test_resolve_config_requires_mqtt_password_if_username_is_set() -> None:
 
 
 def test_resolve_config_loads_topic_filters_and_defaults() -> None:
+    config_path = Path(__file__).parent / "fixtures" / "subscriber-defaults.json"
     config = resolve_config(
-        build_args(mqtt_client_id="custom-client"),
+        config_path=str(config_path),
         environ={
             "POSTGRES_USERNAME": "postgres",
             "POSTGRES_PASSWORD": "secret",
@@ -106,7 +78,7 @@ def test_resolve_config_loads_json_config(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    config = resolve_config(build_args(config=str(config_path), topic_filter=None), environ={})
+    config = resolve_config(config_path=str(config_path), environ={})
 
     assert config.mqtt_host == "mqtt-broker"
     assert config.mqtt_client_id == "subscriber-a"
@@ -114,30 +86,10 @@ def test_resolve_config_loads_json_config(tmp_path: Path) -> None:
     assert config.db_username == "postgres"
 
 
-def test_cli_topic_filters_override_json_config(tmp_path: Path) -> None:
-    config_path = tmp_path / "subscriber.json"
-    config_path.write_text(
-        json.dumps(
-            {
-                "db_username": "postgres",
-                "db_password": "secret",
-                "topic_filters": ["sensors/+/temp"],
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    config = resolve_config(
-        build_args(config=str(config_path), topic_filter=["sensors/+/humidity"]),
-        environ={},
-    )
-
-    assert config.topic_filters == ("sensors/+/humidity",)
-
-
 def test_resolve_config_uses_environment_defaults() -> None:
+    config_path = Path(__file__).parent / "fixtures" / "subscriber-defaults.json"
     config = resolve_config(
-        build_args(),
+        config_path=str(config_path),
         environ={
             "POSTGRES_USERNAME": "postgres",
             "POSTGRES_PASSWORD": "secret",
@@ -163,8 +115,9 @@ def test_resolve_config_uses_environment_defaults() -> None:
 
 
 def test_resolve_config_accepts_text_log_format() -> None:
+    config_path = Path(__file__).parent / "fixtures" / "subscriber-text-log.json"
     config = resolve_config(
-        build_args(log_format="text", log_level="INFO"),
+        config_path=str(config_path),
         environ={
             "POSTGRES_USERNAME": "postgres",
             "POSTGRES_PASSWORD": "secret",

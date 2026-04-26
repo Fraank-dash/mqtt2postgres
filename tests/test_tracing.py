@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from mqtt2postgres.tracing import build_trace_payload, new_event_id, new_trace_id, parse_trace_payload
+from observability.tracing import build_trace_payload, new_event_id, new_trace_id, parse_trace_payload
 
 
 def test_build_and_parse_trace_payload_round_trip() -> None:

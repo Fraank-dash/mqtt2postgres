@@ -135,6 +135,11 @@ Edit that JSON file to change the publisher set, topics, or generator ranges wit
 Edit the subscriber JSON file to change broker/database settings or the topic filter list without rewriting the Compose command.
 Edit the topic-overview subscriber JSON file to change the overview ingest function or the topic filter scope without rewriting the Compose command. The default config includes both `#` and `$SYS/#` so broker status topics are recorded in `mqtt_ingest.topic_overview`.
 
+Supported publisher topic generator kinds:
+
+- `uniform`
+- `clipped_normal`
+
 For a temporary one-off publisher command, run:
 
 ```bash
@@ -143,6 +148,33 @@ docker compose -f examples/local-stack/docker-compose.yml run --rm mqtt-publishe
 ```
 
 The JSON format supports multiple publisher entries, and each publisher can define multiple topics with independent generators. Each topic generates its own value stream on every publish cycle.
+
+## Generate A Learned Twin Publisher Config
+
+You can synthesize a fresh `publisher-config.json` style document from retained aggregate rows.
+
+Example:
+
+```bash
+PYTHONPATH=src mqtt2postgres-twin-config \
+  --db-host 127.0.0.1 \
+  --db-port 55432 \
+  --db-name mqtt \
+  --db-user postgres \
+  --db-password postgres \
+  --topic-filter 'sensors/+/temp' \
+  --output generated-publisher-config.json
+```
+
+Default behavior:
+
+- learns from `mqtt_ingest.message_24h_aggregates`
+- requires `quality_status = 'rated'`
+- requires `quality_score >= 5.0`
+- infers cadence from interval metrics when available
+- prefers `clipped_normal` generators and falls back to `uniform` when spread information is too weak
+
+This is intended for feeding retained aggregate behavior back into the local MQTT simulation bench.
 
 ## Manual Host Workflow
 
@@ -170,21 +202,6 @@ export POSTGRES_PASSWORD=postgres
 
 python main.py \
   --config path/to/subscriber.json
-```
-
-Or configure the subscriber directly with flags:
-
-```bash
-python main.py \
-  --log-format text \
-  --log-level DEBUG \
-  --mqtt-host 127.0.0.1 \
-  --mqtt-port 1883 \
-  --db-host 127.0.0.1 \
-  --db-port 55432 \
-  --db-name mqtt \
-  --topic-filter 'sensors/+/temp' \
-  --db-ingest-function mqtt_ingest.ingest_message
 ```
 
 The ingestor is a long-running subscriber. Leave it running while publishing messages.

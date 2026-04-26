@@ -1,4 +1,4 @@
-from mqtt2postgres.cli import main
+from mqtt2postgres.app import main
 
 
 raise SystemExit(main())

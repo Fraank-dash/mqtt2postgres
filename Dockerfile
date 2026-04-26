@@ -12,4 +12,4 @@ COPY --chown=$MAMBA_USER:$MAMBA_USER src /app/src
 ENV PATH=/opt/conda/envs/mqtt2postgres/bin:$PATH
 ENV PYTHONPATH=/app/src
 
-ENTRYPOINT ["python", "-m", "mqtt2postgres.cli"]
+ENTRYPOINT ["python", "-m", "mqtt2postgres"]

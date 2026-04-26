@@ -12,7 +12,9 @@
         {
           "topic": "sensors/node-1/temp",
           "generator": {
-            "kind": "uniform",
+            "kind": "clipped_normal",
+            "mean": 5,
+            "stddev": 1.5,
             "min_value": 0,
             "max_value": 10,
             "seed": 7
@@ -41,7 +43,9 @@
         {
           "topic": "sensors/node-2/temp",
           "generator": {
-            "kind": "uniform",
+            "kind": "clipped_normal",
+            "mean": 15,
+            "stddev": 1.5,
             "min_value": 10,
             "max_value": 20,
             "seed": 9

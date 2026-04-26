@@ -2,7 +2,7 @@
 
 ## Subscription
 
-The app subscribes to every topic filter passed with `--topic-filter`.
+The app subscribes to every topic filter listed in the subscriber JSON config file.
 
 When a message arrives, the subscriber confirms that the topic still matches one configured filter and then passes the raw MQTT message to the configured database function. The Python process does not validate target tables or payload schema.
 
@@ -92,9 +92,9 @@ The ingest function refreshes the touched 3-minute, 15-minute, 60-minute, and 24
 
 The runtime writes logs to stdout/stderr.
 
-- `--log-format json` is the default and is intended for Docker.
-- `--log-format text` is intended for local development and debugger sessions.
-- `--log-level INFO` is the default verbosity.
+- `log_format: "json"` is the default and is intended for Docker.
+- `log_format: "text"` is intended for local development and debugger sessions.
+- `log_level: "INFO"` is the default verbosity.
 
 Typical event names:
 
@@ -113,14 +113,5 @@ Local verbose run:
 export POSTGRES_USERNAME=postgres
 export POSTGRES_PASSWORD=postgres
 
-python main.py \
-  --log-format text \
-  --log-level DEBUG \
-  --mqtt-host 127.0.0.1 \
-  --mqtt-port 1883 \
-  --db-host 127.0.0.1 \
-  --db-port 55432 \
-  --db-name mqtt \
-  --topic-filter 'sensors/+/temp' \
-  --db-ingest-function mqtt_ingest.ingest_message
+python main.py --config path/to/subscriber.json
 ```

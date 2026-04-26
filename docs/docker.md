@@ -21,6 +21,18 @@ The publisher service mounts `examples/local-stack/publisher-config.json` read-o
 The subscriber service mounts `examples/local-stack/subscriber-config.json` read-only and starts with `--config /config/subscriber-config.json`.
 The topic-overview subscriber mounts `examples/local-stack/subscriber-topics-config.json` read-only and starts with `--config /config/subscriber-topics-config.json`.
 
+To generate a learned publisher config from retained aggregates on the host:
+
+```bash
+PYTHONPATH=src mqtt2postgres-twin-config \
+  --db-host 127.0.0.1 \
+  --db-port 55432 \
+  --db-name mqtt \
+  --db-user postgres \
+  --db-password postgres \
+  --topic-filter 'sensors/+/temp'
+```
+
 ## Run A Standalone Ingestor Container
 
 Start the local infrastructure first:
@@ -36,18 +48,9 @@ docker run --rm \
   --add-host=host.docker.internal:host-gateway \
   -e POSTGRES_USERNAME=postgres \
   -e POSTGRES_PASSWORD=postgres \
+  -v "$(pwd)/examples/local-stack/subscriber-config.json:/config/subscriber-config.json:ro" \
   mqtt2postgres \
-  --log-level INFO \
-  --mqtt-host host.docker.internal \
-  --mqtt-port 1883 \
-  --db-host host.docker.internal \
-  --db-port 55432 \
-  --db-name mqtt \
-  --mqtt-user admin \
-  --mqtt-password secret \
-  --config /config/subscriber-config.json \
-  --topic-filter 'sensors/+/temp' \
-  --db-ingest-function mqtt_ingest.ingest_message
+  --config /config/subscriber-config.json
 ```
 
 ## Container Networking

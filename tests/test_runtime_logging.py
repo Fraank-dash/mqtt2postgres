@@ -1,7 +1,7 @@
 import json
 import logging
 
-from mqtt2postgres.runtime_logging import (
+from observability.logging import (
     EventLogger,
     RuntimeEvent,
     redact_value,

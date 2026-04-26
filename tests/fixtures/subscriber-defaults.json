@@ -1,0 +1,4 @@
+{
+  "mqtt_client_id": "custom-client",
+  "topic_filters": ["devices/+/temp"]
+}

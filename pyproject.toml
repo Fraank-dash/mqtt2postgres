@@ -19,7 +19,8 @@ dependencies = [
 ]
 
 [project.scripts]
-mqtt2postgres = "mqtt2postgres.cli:main"
+mqtt2postgres = "mqtt2postgres.app:main"
+mqtt2postgres-twin-config = "mqtt2postgres.twin_config:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -28,6 +29,6 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools_scm]
-fallback_version = "0.3.0"
+fallback_version = "0.8.0"
 version_scheme = "post-release"
 local_scheme = "no-local-version"

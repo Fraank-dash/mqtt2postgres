@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mqtt2postgres.publisher import (
+from broker.publisher import (
     PublisherConfig,
     PublisherError,
     PublisherTopicConfig,
@@ -22,7 +22,7 @@ from mqtt2postgres.publisher import (
     run_publishers,
     validate_config,
 )
-from mqtt2postgres.tracing import parse_trace_payload
+from observability.tracing import parse_trace_payload
 
 
 class FakeClient:
@@ -57,6 +57,9 @@ def build_topic_config(**overrides) -> PublisherTopicConfig:
         max_value=10.0,
         seed=7,
         trace_id="trace-1",
+        kind="uniform",
+        mean=None,
+        stddev=None,
     )
     return PublisherTopicConfig(**(base.__dict__ | overrides))
 
@@ -102,6 +105,37 @@ def test_seeded_rng_is_deterministic() -> None:
     values_b = [generate_value(config, create_rng(config.seed)) for _ in range(3)]
 
     assert values_a == values_b
+
+
+def test_clipped_normal_output_stays_within_requested_range() -> None:
+    config = build_topic_config(
+        kind="clipped_normal",
+        min_value=2.0,
+        max_value=3.0,
+        mean=10.0,
+        stddev=5.0,
+        seed=123,
+    )
+    rng = create_rng(config.seed)
+
+    values = [generate_value(config, rng) for _ in range(100)]
+
+    assert all(2.0 <= value <= 3.0 for value in values)
+
+
+def test_validate_config_rejects_non_positive_clipped_normal_stddev() -> None:
+    with pytest.raises(PublisherError, match="stddev > 0"):
+        validate_config(
+            build_config(
+                topics=(
+                    build_topic_config(
+                        kind="clipped_normal",
+                        mean=5.0,
+                        stddev=0.0,
+                    ),
+                )
+            )
+        )
 
 
 def test_publish_payload_contains_trace_fields() -> None:
@@ -330,6 +364,43 @@ def test_load_publisher_configs_reads_multiple_publishers(tmp_path: Path) -> Non
     assert configs[1].topics[0].topic == "sensors/node-2/temp"
 
 
+def test_load_publisher_configs_reads_clipped_normal_generators(tmp_path: Path) -> None:
+    config_path = tmp_path / "publisher.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "publishers": [
+                    {
+                        "host": "mqtt-broker",
+                        "frequency_seconds": 1,
+                        "client_id": "pub-1",
+                        "topics": [
+                            {
+                                "topic": "sensors/node-1/temp",
+                                "generator": {
+                                    "kind": "clipped_normal",
+                                    "mean": 12.3,
+                                    "stddev": 1.8,
+                                    "min_value": 8.0,
+                                    "max_value": 16.0,
+                                    "seed": 7,
+                                },
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    configs = load_publisher_configs(config_path)
+
+    assert configs[0].topics[0].kind == "clipped_normal"
+    assert configs[0].topics[0].mean == 12.3
+    assert configs[0].topics[0].stddev == 1.8
+
+
 def test_render_publish_message_contains_core_fields() -> None:
     rendered = render_publish_message(
         index=2,
@@ -350,7 +421,7 @@ def test_render_publish_message_contains_core_fields() -> None:
 
 def test_main_returns_zero_on_keyboard_interrupt(monkeypatch) -> None:
     monkeypatch.setattr(
-        "mqtt2postgres.publisher.run_publisher",
+        "broker.publisher.cli.run_publisher",
         lambda config: (_ for _ in ()).throw(KeyboardInterrupt()),
     )
 

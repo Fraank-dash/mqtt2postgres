@@ -1,9 +1,14 @@
-from __future__ import annotations
-
-import warnings
-from collections.abc import Sequence
-
-from broker.publisher import (
+from broker.publisher.cli import main
+from broker.publisher.config import (
+    build_argument_parser,
+    config_from_args,
+    load_publisher_configs,
+    parse_publisher_config,
+    parse_topic_config,
+    validate_config,
+    validate_topic_config,
+)
+from broker.publisher.models import (
     DEFAULT_CLIENT_ID,
     DEFAULT_HOST,
     DEFAULT_PAYLOAD_FORMAT,
@@ -15,25 +20,18 @@ from broker.publisher import (
     PublisherRuntimeState,
     PublisherTopicConfig,
     PublisherTopicState,
-    build_argument_parser,
+)
+from broker.publisher.runtime import (
     build_topic_state,
-    config_from_args,
     create_rng,
     format_payload,
     generate_value,
-    load_publisher_configs,
-    main,
-    parse_publisher_config,
-    parse_topic_config,
     publish_messages,
     publish_publisher_cycle,
     render_publish_message,
     run_publisher,
     run_publishers,
-    validate_config,
-    validate_topic_config,
 )
-from broker.publisher import main as broker_main
 
 __all__ = [
     "DEFAULT_CLIENT_ID",
@@ -65,17 +63,3 @@ __all__ = [
     "validate_config",
     "validate_topic_config",
 ]
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    warnings.warn(
-        "mqtt2postgres.publisher is deprecated and will be removed in a future release. "
-        "Use broker.publisher instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return broker_main(argv)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

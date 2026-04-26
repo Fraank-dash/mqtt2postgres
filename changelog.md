@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## 0.8.0 - 2026-04-26
+
+### Topic: Simulation
+- Added aggregate-driven twin-config helpers that generate `publisher-config.json` style output from retained aggregate tables.
+- Extended the publisher runtime to support both `uniform` and `clipped_normal` topic generators.
+
+### Topic: Runtime Structure
+- Added a dedicated `mqtt2postgres.app` entrypoint and switched the package script and Docker entrypoint to use it.
+- Moved broker-facing MQTT helpers into `src/broker`, including a split publisher package with separate models, config loading, runtime, and CLI modules.
+- Moved subscriber ingestion runtime code into `src/ingest`.
+- Moved trace payload and runtime logging helpers into `src/observability`.
+
+### Topic: Configuration
+- Simplified subscriber runtime configuration so `mqtt2postgres` now accepts only `--config` for bootstrap and resolves subscriber settings from JSON config plus environment defaults.
+- Removed subscriber support for per-setting runtime CLI overrides such as direct `--mqtt-host`, `--db-host`, `--topic-filter`, and related flags.
+
+### Topic: Compatibility
+- Deprecated `mqtt2postgres.cli` in favor of `mqtt2postgres.app` and `python -m mqtt2postgres`.
+- Deprecated `mqtt2postgres.publisher` in favor of `broker.publisher`.
+- Kept compatibility shim modules for `mqtt2postgres.mqtt`, `mqtt2postgres.service`, `mqtt2postgres.runtime_logging`, `mqtt2postgres.tracing`, and `mqtt2postgres.publisher` during the refactor.
+
+### Topic: Documentation
+- Updated runtime, Docker, and configuration docs to reflect JSON-config-first subscriber configuration and the new entrypoint layout.
+
 ## 0.7.1 - 2026-04-25
 
 ### Topic: Documentation
