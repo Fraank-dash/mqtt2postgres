@@ -23,7 +23,7 @@ def test_resolve_config_requires_database_password() -> None:
 
 def test_resolve_config_requires_mqtt_password_if_username_is_set() -> None:
     config_path = Path(__file__).parent / "fixtures" / "subscriber-defaults.json"
-    with pytest.raises(SubscriberSettingsError, match="mqtt-password"):
+    with pytest.raises(SubscriberSettingsError, match="MQTT password"):
         resolve_subscriber_settings(
             settings_path=str(config_path),
             environ={

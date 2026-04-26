@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1 - 2026-04-26
+
+### Topic: Testing
+- Added `tests/conftest.py` so plain `pytest` from the repo root resolves the `src/` layout without requiring `PYTHONPATH=src`.
+- Updated the MQTT password validation test to match the current subscriber settings error message.
+
 ## 0.9.0 - 2026-04-26
 
 ### Topic: App Structure
