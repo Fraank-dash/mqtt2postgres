@@ -1,6 +1,8 @@
 {
   "mqtt_host": "mqtt-broker",
   "mqtt_port": 1883,
+  "mqtt_username": "subscriber-topics",
+  "mqtt_password": "subscriber-topics-secret",
   "mqtt_client_id": "mqtt2postgres-topic-overview",
   "mqtt_qos": 0,
   "db_host": "timescaledb",

@@ -27,11 +27,15 @@ from observability.tracing import parse_trace_payload
 
 class FakeClient:
     def __init__(self) -> None:
+        self.username_pw_set_calls: list[tuple[str, str | None]] = []
         self.connect_calls: list[tuple[str, int]] = []
         self.publish_calls: list[tuple[str, str, int]] = []
         self.loop_started = False
         self.loop_stopped = False
         self.disconnected = False
+
+    def username_pw_set(self, username: str, password: str | None = None) -> None:
+        self.username_pw_set_calls.append((username, password))
 
     def connect(self, host: str, port: int) -> None:
         self.connect_calls.append((host, port))
@@ -68,6 +72,8 @@ def build_config(**overrides) -> PublisherConfig:
     base = PublisherConfig(
         host="127.0.0.1",
         port=1883,
+        mqtt_username=None,
+        mqtt_password=None,
         frequency_seconds=0.5,
         count=3,
         client_id="publisher-test",
@@ -241,6 +247,28 @@ def test_run_publisher_wires_client_parameters() -> None:
     assert client.loop_started is True
     assert client.loop_stopped is True
     assert client.disconnected is True
+    assert client.username_pw_set_calls == []
+
+
+def test_run_publisher_sets_mqtt_credentials_before_connect() -> None:
+    client = FakeClient()
+
+    def client_factory(*, client_id: str, clean_session: bool):
+        assert client_id == "publisher-test"
+        assert clean_session is True
+        return client
+
+    published = run_publisher(
+        build_config(count=1, mqtt_username="publisher-node-1", mqtt_password="secret"),
+        client_factory=client_factory,
+        sleep_fn=lambda _: None,
+        emit_line=lambda _: None,
+        now_fn=lambda: datetime(2026, 4, 24, tzinfo=timezone.utc),
+    )
+
+    assert published == 1
+    assert client.username_pw_set_calls == [("publisher-node-1", "secret")]
+    assert client.connect_calls == [("127.0.0.1", 1883)]
 
 
 def test_run_publishers_handles_multiple_publishers_and_topics() -> None:
@@ -297,6 +325,8 @@ def test_config_from_args_builds_valid_config() -> None:
         config=None,
         host="127.0.0.1",
         port=1883,
+        mqtt_username="publisher-node-1",
+        mqtt_password="secret",
         topic="sensors/node-1/temp",
         min_value=0.0,
         max_value=10.0,
@@ -313,6 +343,8 @@ def test_config_from_args_builds_valid_config() -> None:
     config = config_from_args(args)
 
     assert config.count == 5
+    assert config.mqtt_username == "publisher-node-1"
+    assert config.mqtt_password == "secret"
     assert config.topics[0].seed == 11
     assert config.publisher_id == "publisher-test"
     assert config.topics[0].trace_id == "trace-123"
@@ -326,6 +358,8 @@ def test_load_publisher_configs_reads_multiple_publishers(tmp_path: Path) -> Non
                 "publishers": [
                     {
                         "host": "mqtt-broker",
+                        "mqtt_username": "pub-1",
+                        "mqtt_password": "secret-1",
                         "frequency_seconds": 1,
                         "client_id": "pub-1",
                         "topics": [
@@ -360,8 +394,61 @@ def test_load_publisher_configs_reads_multiple_publishers(tmp_path: Path) -> Non
 
     assert len(configs) == 2
     assert configs[0].client_id == "pub-1"
+    assert configs[0].mqtt_username == "pub-1"
+    assert configs[0].mqtt_password == "secret-1"
     assert len(configs[0].topics) == 2
     assert configs[1].topics[0].topic == "sensors/node-2/temp"
+
+
+def test_config_from_args_requires_mqtt_password_if_username_is_set() -> None:
+    args = SimpleNamespace(
+        config=None,
+        host="127.0.0.1",
+        port=1883,
+        mqtt_username="publisher-node-1",
+        mqtt_password=None,
+        topic="sensors/node-1/temp",
+        min_value=0.0,
+        max_value=10.0,
+        frequency_seconds=1.0,
+        count=5,
+        client_id="publisher-test",
+        publisher_id=None,
+        qos=0,
+        seed=11,
+        trace_id="trace-123",
+        payload_format="json",
+    )
+
+    with pytest.raises(PublisherError, match="mqtt-password"):
+        config_from_args(args)
+
+
+def test_load_publisher_configs_requires_mqtt_username_if_password_is_set(tmp_path: Path) -> None:
+    config_path = tmp_path / "publisher.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "publishers": [
+                    {
+                        "host": "mqtt-broker",
+                        "mqtt_password": "secret-1",
+                        "frequency_seconds": 1,
+                        "topics": [
+                            {
+                                "topic": "sensors/node-1/temp",
+                                "generator": {"kind": "uniform", "min_value": 0, "max_value": 10, "seed": 7},
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PublisherError, match="mqtt_username"):
+        load_publisher_configs(config_path)
 
 
 def test_load_publisher_configs_reads_clipped_normal_generators(tmp_path: Path) -> None:

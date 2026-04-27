@@ -21,6 +21,8 @@ MQTT defaults:
 - `mqtt_host`: `127.0.0.1`
 - `mqtt_port`: `1883`
 - `mqtt_qos`: `0`
+- `mqtt_username`: unset
+- `mqtt_password`: unset
 
 Database defaults:
 
@@ -52,6 +54,8 @@ Use `--config path/to/subscriber.json` to load one subscriber settings file with
 {
   "mqtt_host": "mqtt-broker",
   "mqtt_port": 1883,
+  "mqtt_username": "subscriber-ingest",
+  "mqtt_password": "subscriber-ingest-secret",
   "db_host": "timescaledb",
   "db_port": 5432,
   "db_name": "mqtt",
@@ -89,3 +93,5 @@ python -m apps.publisher --config path/to/publisher.yaml
 ```
 
 Publisher settings files can describe multiple publishers and multiple topics per publisher. JSON and YAML use the same document structure.
+
+Each publisher entry may also include `mqtt_username` and `mqtt_password`. They must be configured together.

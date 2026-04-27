@@ -33,6 +33,8 @@ class PublisherTopicConfig:
 class PublisherConfig:
     host: str
     port: int
+    mqtt_username: str | None
+    mqtt_password: str | None
     frequency_seconds: float
     count: int | None
     client_id: str
@@ -64,6 +66,8 @@ class PublishResult(Protocol):
 
 
 class MQTTClientProtocol(Protocol):
+    def username_pw_set(self, username: str, password: str | None = None) -> None: ...
+
     def connect(self, host: str, port: int) -> None: ...
 
     def loop_start(self) -> None: ...

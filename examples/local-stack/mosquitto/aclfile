@@ -1,0 +1,18 @@
+user publisher-node-1
+topic write sensors/node-1/#
+
+user publisher-node-2
+topic write sensors/node-2/#
+
+user publisher-node-3
+topic write sensors/node-3/#
+
+user subscriber-ingest
+topic read sensors/+/temp
+topic read sensors/+/humidity
+topic read sensors/+/power
+topic read sensors/+/energy
+
+user subscriber-topics
+topic read #
+topic read $SYS/#

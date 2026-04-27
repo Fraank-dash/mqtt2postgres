@@ -173,6 +173,11 @@ def run_publishers(
     for config in configs:
         validate_config(config)
         client = client_factory(client_id=config.client_id, clean_session=True)
+        if config.mqtt_username:
+            client.username_pw_set(
+                username=config.mqtt_username,
+                password=config.mqtt_password,
+            )
         client.connect(config.host, config.port)
         client.loop_start()
         states.append(

@@ -25,10 +25,19 @@ services:
   mqtt-broker:
     image: eclipse-mosquitto:2
     container_name: mqtt2postgres-local-broker
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        cp /mosquitto/config-src/mosquitto.conf /mosquitto/config/mosquitto.conf &&
+        cp /mosquitto/config-src/passwords /mosquitto/config/passwords &&
+        cp /mosquitto/config-src/aclfile /mosquitto/config/aclfile &&
+        chown mosquitto:mosquitto /mosquitto/config/passwords /mosquitto/config/aclfile &&
+        chmod 600 /mosquitto/config/passwords /mosquitto/config/aclfile &&
+        exec mosquitto -c /mosquitto/config/mosquitto.conf
     ports:
-      - "127.0.0.1:1883:1883"
+      - "1883:1883"
     volumes:
-      - ../mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - /mnt/nvme/mqtt/mosquitto:/mosquitto/config-src:ro
 
   mqtt-subscriber:
     build:

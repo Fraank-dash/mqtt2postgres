@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.2 - 2026-04-27
+
+### Topic: Secure MQTT Broker
+- Switched the local Mosquitto broker from anonymous access to authenticated access with a password file and ACL file.
+- Added distinct MQTT credentials for the default local publishers, the ingest subscriber, and the topic-overview subscriber.
+- Added topic ACLs so publisher accounts are limited to their own device namespace and subscribers receive only the intended read scope.
+- Updated the local Docker broker startup flow to copy mounted broker auth files into the runtime config directory with restricted permissions before Mosquitto starts.
+- Added a dedicated secure smoke test that validates successful authenticated publish/subscribe flows, bad-password rejection, denied `$SYS` delivery for the ingest account, and denied cross-namespace publishes.
+
+### Topic: Publisher Runtime
+- Extended publisher settings and CLI parsing to support `mqtt_username` and `mqtt_password`.
+- Added paired validation for publisher MQTT credentials and applied those credentials before connecting to the broker.
+- Expanded publisher unit coverage for MQTT credential parsing and runtime wiring.
+
+### Topic: Documentation
+- Documented the secure broker workflow, read-only broker mount behavior, password hashing flow, and operational restart rules.
+- Added a broker-focused how-to for adding publishers, subscribers, metrics, and ACL entries both before startup and while the broker is already running.
+
 ## 0.9.1 - 2026-04-26
 
 ### Topic: Testing

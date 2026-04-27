@@ -29,6 +29,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", default=None, help="Path to a JSON or YAML publisher settings file.")
     parser.add_argument("--host", default=None, help="MQTT broker host.")
     parser.add_argument("--port", type=int, default=None, help="MQTT broker port.")
+    parser.add_argument("--mqtt-username", default=None, help="MQTT broker username.")
+    parser.add_argument("--mqtt-password", default=None, help="MQTT broker password.")
     parser.add_argument("--topic", default=None, help="MQTT topic to publish to.")
     parser.add_argument("--min-value", type=float, default=None, help="Minimum random value to publish.")
     parser.add_argument("--max-value", type=float, default=None, help="Maximum random value to publish.")
@@ -60,6 +62,8 @@ def config_from_args(args: argparse.Namespace) -> PublisherConfig:
     raw_config = {
         "host": args.host,
         "port": args.port,
+        "mqtt_username": args.mqtt_username,
+        "mqtt_password": args.mqtt_password,
         "frequency_seconds": args.frequency_seconds,
         "count": args.count,
         "client_id": args.client_id,
@@ -236,6 +240,8 @@ class PublisherEntryModel(BaseModel):
 
     host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
+    mqtt_username: str | None = None
+    mqtt_password: str | None = None
     frequency_seconds: float
     count: int | None = None
     client_id: str | None = None
@@ -277,6 +283,20 @@ class PublisherEntryModel(BaseModel):
             return None
         return _strip_text(value, "client_id")
 
+    @field_validator("mqtt_username")
+    @classmethod
+    def validate_mqtt_username(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _strip_text(value, "mqtt_username")
+
+    @field_validator("mqtt_password")
+    @classmethod
+    def validate_mqtt_password(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _strip_text(value, "mqtt_password")
+
     @field_validator("publisher_id")
     @classmethod
     def validate_publisher_id(cls, value: str | None) -> str | None:
@@ -306,12 +326,22 @@ class PublisherEntryModel(BaseModel):
             raise ValueError("must contain at least one topic.")
         return value
 
+    @model_validator(mode="after")
+    def validate_mqtt_credentials(self) -> "PublisherEntryModel":
+        if self.mqtt_username and not self.mqtt_password:
+            raise ValueError("mqtt_password is required when mqtt_username is configured.")
+        if self.mqtt_password and not self.mqtt_username:
+            raise ValueError("mqtt_username is required when mqtt_password is configured.")
+        return self
+
     def to_runtime_config(self, *, index: int) -> PublisherConfig:
         client_id = self.client_id or f"{DEFAULT_CLIENT_ID}-{index + 1}"
         publisher_id = self.publisher_id or client_id
         return PublisherConfig(
             host=self.host,
             port=self.port,
+            mqtt_username=self.mqtt_username,
+            mqtt_password=self.mqtt_password,
             frequency_seconds=self.frequency_seconds,
             count=self.count,
             client_id=client_id,
@@ -328,6 +358,8 @@ class PublisherEntryModel(BaseModel):
         return cls(
             host=config.host,
             port=config.port,
+            mqtt_username=config.mqtt_username,
+            mqtt_password=config.mqtt_password,
             frequency_seconds=config.frequency_seconds,
             count=config.count,
             client_id=None if config.client_id == default_client_id else config.client_id,
@@ -362,6 +394,8 @@ class SingleTopicPublisherConfigModel(BaseModel):
 
     host: str | None = None
     port: int | None = None
+    mqtt_username: str | None = None
+    mqtt_password: str | None = None
     frequency_seconds: float | None = None
     count: int | None = None
     client_id: str | None = None
@@ -388,6 +422,10 @@ class SingleTopicPublisherConfigModel(BaseModel):
             raise ValueError(
                 f"Single-topic mode requires these arguments when --config is not used: {missing_args}."
             )
+        if self.mqtt_username and not self.mqtt_password:
+            raise ValueError("--mqtt-password is required when --mqtt-username is configured.")
+        if self.mqtt_password and not self.mqtt_username:
+            raise ValueError("--mqtt-username is required when --mqtt-password is configured.")
         return self
 
     def to_runtime_config(self) -> PublisherConfig:
@@ -398,6 +436,8 @@ class SingleTopicPublisherConfigModel(BaseModel):
         entry = PublisherEntryModel(
             host=self.host or DEFAULT_HOST,
             port=self.port or DEFAULT_PORT,
+            mqtt_username=self.mqtt_username,
+            mqtt_password=self.mqtt_password,
             frequency_seconds=self.frequency_seconds,
             count=self.count,
             client_id=self.client_id or DEFAULT_CLIENT_ID,

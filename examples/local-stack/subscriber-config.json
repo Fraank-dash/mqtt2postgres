@@ -1,6 +1,8 @@
 {
   "mqtt_host": "mqtt-broker",
   "mqtt_port": 1883,
+  "mqtt_username": "subscriber-ingest",
+  "mqtt_password": "subscriber-ingest-secret",
   "mqtt_client_id": "mqtt2postgres",
   "mqtt_qos": 0,
   "db_host": "timescaledb",
@@ -10,7 +12,9 @@
   "db_password": "postgres",
   "topic_filters": [
     "sensors/+/temp",
-    "sensors/+/humidity"
+    "sensors/+/humidity",
+    "sensors/+/power",
+    "sensors/+/energy"
   ],
   "db_ingest_function": "mqtt_ingest.ingest_message",
   "log_level": "INFO",

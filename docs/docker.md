@@ -15,6 +15,7 @@ docker compose -f examples/local-stack/docker-compose.yml up --build
 ```
 
 This starts the publisher, broker, both subscribers, and TimescaleDB together.
+The Compose stack keeps `mqtt-broker` as the internal service hostname; external host and LAN clients can use `mqtt.pi5.local` once Technitium points that name at the Docker host.
 
 The local database service uses `timescale/timescaledb-ha:pg16` so `timescaledb_toolkit` is available during bootstrap.
 The publisher service mounts `examples/local-stack/publisher-config.json` read-only and starts with `--config /config/publisher-config.json`.

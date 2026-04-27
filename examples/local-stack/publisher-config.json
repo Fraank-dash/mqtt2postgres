@@ -3,6 +3,8 @@
     {
       "host": "mqtt-broker",
       "port": 1883,
+      "mqtt_username": "publisher-node-1",
+      "mqtt_password": "publisher-node-1-secret",
       "client_id": "publisher-node-1",
       "publisher_id": "node-1-sim",
       "qos": 0,
@@ -34,6 +36,8 @@
     {
       "host": "mqtt-broker",
       "port": 1883,
+      "mqtt_username": "publisher-node-2",
+      "mqtt_password": "publisher-node-2-secret",
       "client_id": "publisher-node-2",
       "publisher_id": "node-2-sim",
       "qos": 0,
@@ -58,6 +62,39 @@
             "min_value": 45,
             "max_value": 65,
             "seed": 10
+          }
+        }
+      ]
+    },
+    {
+      "host": "mqtt-broker",
+      "port": 1883,
+      "mqtt_username": "publisher-node-3",
+      "mqtt_password": "publisher-node-3-secret",
+      "client_id": "publisher-node-3",
+      "publisher_id": "node-3-sim",
+      "qos": 0,
+      "payload_format": "json",
+      "frequency_seconds": 1,
+      "topics": [
+        {
+          "topic": "sensors/node-3/power",
+          "generator": {
+            "kind": "clipped_normal",
+            "mean": 120,
+            "stddev": 8,
+            "min_value": 90,
+            "max_value": 150,
+            "seed": 11
+          }
+        },
+        {
+          "topic": "sensors/node-3/energy",
+          "generator": {
+            "kind": "uniform",
+            "min_value": 1000,
+            "max_value": 2000,
+            "seed": 12
           }
         }
       ]
