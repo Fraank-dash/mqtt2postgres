@@ -9,6 +9,7 @@ The current focus is [`examples/local-stack`](examples/local-stack/docker-compos
 - ingesting messages through PostgreSQL/TimescaleDB functions
 - keeping a broker-wide topic inventory
 - building retained `3m`, `15m`, `60m`, and `24h` aggregates with quality scoring
+- reconciling `power` integration against cumulative `energy` counters per device and bucket
 
 If you want a short mental model, this repo is closer to a small IoT simulation and ingestion bench than to a one-off MQTT subscriber script.
 
@@ -40,12 +41,21 @@ Start the full local stack:
 docker compose -f examples/local-stack/docker-compose.yml up --build
 ```
 
+Or use the helper script:
+
+```bash
+./scripts/dev/reset-local-test-stack.sh
+```
+
 The important host endpoints are:
 
 - MQTT broker: `127.0.0.1:1883`
+- MQTT broker with Technitium DNS: `mqtt.pi5.local:1883`
 - Postgres/TimescaleDB: `127.0.0.1:55432`
 - database: `mqtt`
 - username/password: `postgres` / `postgres`
+
+The broker now requires MQTT authentication. The example local stack ships with separate publisher and subscriber accounts from `examples/local-stack/mosquitto/`, which is now a public broker submodule checkout. Before first startup, populate `examples/local-stack/mosquitto/passwords` from `passwords.example` or switch that submodule to your private broker branch.
 
 Stop and fully reset the stack:
 
@@ -54,6 +64,7 @@ docker compose -f examples/local-stack/docker-compose.yml down -v
 ```
 
 Use the reset path after SQL bootstrap changes so the database is recreated from `examples/sql/mqtt-ingest`.
+That path is now a Git submodule checkout backed by the standalone SQL fork in `forks/mqtt-ingest-sql`.
 
 ## Simulation Model
 
@@ -128,6 +139,10 @@ The stack has two subscriber paths:
      - `mqtt_ingest.message_15m_aggregates`
      - `mqtt_ingest.message_60m_aggregates`
      - `mqtt_ingest.message_24h_aggregates`
+     - `mqtt_ingest.power_energy_3m_reconciliation`
+     - `mqtt_ingest.power_energy_15m_reconciliation`
+     - `mqtt_ingest.power_energy_60m_reconciliation`
+     - `mqtt_ingest.power_energy_24h_reconciliation`
 
 2. Topic-overview ingest
    - config: [`examples/local-stack/subscriber-topics-config.json`](examples/local-stack/subscriber-topics-config.json)
@@ -175,6 +190,18 @@ These aggregate tables now include:
 - interval-regularity metrics
 - technical `status`
 - analytical `quality_score` and explainability fields
+
+Power/energy reconciliation tables:
+
+- `mqtt_ingest.power_energy_3m_reconciliation`
+- `mqtt_ingest.power_energy_15m_reconciliation`
+- `mqtt_ingest.power_energy_60m_reconciliation`
+- `mqtt_ingest.power_energy_24h_reconciliation`
+
+These tables compare two derived energy estimates for `sensors/<device>/power` and `sensors/<device>/energy`:
+
+- cumulative `energy` deltas across the bucket
+- `power` integrated across the same bucket using both LOCF and linear methods
 
 ## Typical Workflow
 
@@ -231,6 +258,7 @@ Optional helper scripts:
 ./scripts/dev/query-local-15m-aggregates.sh
 ./scripts/dev/query-local-60m-aggregates.sh
 ./scripts/dev/query-local-24h-aggregates.sh
+./scripts/dev/query-local-power-energy-reconciliation.sh
 ```
 
 Generate a learned publisher config from retained aggregates:
@@ -249,7 +277,9 @@ PYTHONPATH=src mqtt2postgres-twin-config \
 ## Further Information
 
 - [Development runbook](docs/development-runbook.md): local stack, smoke tests, publishing, queries, cleanup, troubleshooting
+- [Use cases](docs/use-cases.md): common simulation, ingest, topic-inventory, twin-generation, debugging, and power-energy reconciliation scenarios
 - [Configuration](docs/configuration.md): subscriber settings files, publisher settings files, environment variables, topic filters, and ingest function settings
+- [System architecture](docs/system-architecture.md): component responsibilities, cardinalities, and Mermaid class and sequence diagrams
 - [Runtime behavior](docs/runtime-behavior.md): MQTT subscription, database-function ingest, stored aggregates, and logging events
 - [Ingest pipeline](docs/ingest-pipeline.md): flowchart from subscribers through database functions into raw, topic-overview, and aggregate tables
 - [Aggregate status and quality](docs/aggregate-status-and-quality.md): bucket lifecycle, quality scoring inputs, and Mermaid statechart
@@ -259,7 +289,8 @@ PYTHONPATH=src mqtt2postgres-twin-config \
 ## Repository Layout
 
 - `examples/local-stack/`: primary local bench and JSON configs
-- `examples/sql/`: TimescaleDB bootstrap and ingest SQL
+- `examples/sql/mqtt-ingest`: standalone SQL submodule checkout for TimescaleDB bootstrap and ingest SQL
+- `forks/mqtt-ingest-sql/`: standalone SQL fork source repository and provenance files
 - `src/apps/`: canonical subscriber and publisher app packages
 - `src/broker/`: shared broker protocol/client helpers
 - `src/observability/`: shared logging and tracing helpers

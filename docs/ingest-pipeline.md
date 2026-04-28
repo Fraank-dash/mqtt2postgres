@@ -2,6 +2,10 @@
 
 This document describes the local end-to-end path from MQTT publication to PostgreSQL/TimescaleDB storage.
 
+The SQL objects described here are maintained in the standalone SQL submodule checkout at `examples/sql/mqtt-ingest`.
+
+For a more structural description with Mermaid class and sequence diagrams, see [System architecture](system-architecture.md).
+
 The local stack has two subscriber paths:
 
 - `mqtt-subscriber`: handles sensor-message ingest and aggregate refresh
@@ -30,11 +34,19 @@ flowchart TD
     Refresh15m["refresh_message_15m_aggregates(...)"]
     Refresh60m["refresh_message_60m_aggregates(...)"]
     Refresh24h["refresh_message_24h_aggregates(...)"]
+    Recon3m["refresh_power_energy_3m_reconciliation(...)"]
+    Recon15m["refresh_power_energy_15m_reconciliation(...)"]
+    Recon60m["refresh_power_energy_60m_reconciliation(...)"]
+    Recon24h["refresh_power_energy_24h_reconciliation(...)"]
 
     Agg3m["mqtt_ingest.message_3m_aggregates"]
     Agg15m["mqtt_ingest.message_15m_aggregates"]
     Agg60m["mqtt_ingest.message_60m_aggregates"]
     Agg24h["mqtt_ingest.message_24h_aggregates"]
+    PowerEnergy3m["mqtt_ingest.power_energy_3m_reconciliation"]
+    PowerEnergy15m["mqtt_ingest.power_energy_15m_reconciliation"]
+    PowerEnergy60m["mqtt_ingest.power_energy_60m_reconciliation"]
+    PowerEnergy24h["mqtt_ingest.power_energy_24h_reconciliation"]
 
     Jobs["TimescaleDB background jobs\nrun once per minute"]
 
@@ -55,16 +67,28 @@ flowchart TD
     IngestMessage --> Refresh15m
     IngestMessage --> Refresh60m
     IngestMessage --> Refresh24h
+    IngestMessage --> Recon3m
+    IngestMessage --> Recon15m
+    IngestMessage --> Recon60m
+    IngestMessage --> Recon24h
 
     Refresh3m --> Agg3m
     Refresh15m --> Agg15m
     Refresh60m --> Agg60m
     Refresh24h --> Agg24h
+    Recon3m --> PowerEnergy3m
+    Recon15m --> PowerEnergy15m
+    Recon60m --> PowerEnergy60m
+    Recon24h --> PowerEnergy24h
 
     Jobs --> Refresh3m
     Jobs --> Refresh15m
     Jobs --> Refresh60m
     Jobs --> Refresh24h
+    Jobs --> Recon3m
+    Jobs --> Recon15m
+    Jobs --> Recon60m
+    Jobs --> Recon24h
 ```
 
 ## Sensor Ingest Path
@@ -80,8 +104,14 @@ The sensor subscriber is the data path used for retained raw messages and stored
    - `message_15m_aggregates`
    - `message_60m_aggregates`
    - `message_24h_aggregates`
+   - `power_energy_3m_reconciliation`
+   - `power_energy_15m_reconciliation`
+   - `power_energy_60m_reconciliation`
+   - `power_energy_24h_reconciliation`
 
 This means the raw hypertable is the primary source, and the aggregate tables are derived from it.
+
+For `power` and `energy` topics, the raw hypertable is also the source of a separate per-device reconciliation path that compares integrated `power` against cumulative `energy` deltas.
 
 ## Topic Overview Path
 
@@ -121,6 +151,10 @@ Derived tables:
 - `mqtt_ingest.message_15m_aggregates`
 - `mqtt_ingest.message_60m_aggregates`
 - `mqtt_ingest.message_24h_aggregates`
+- `mqtt_ingest.power_energy_3m_reconciliation`
+- `mqtt_ingest.power_energy_15m_reconciliation`
+- `mqtt_ingest.power_energy_60m_reconciliation`
+- `mqtt_ingest.power_energy_24h_reconciliation`
 
 Each aggregate row is grouped by:
 

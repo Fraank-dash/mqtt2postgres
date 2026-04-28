@@ -22,14 +22,19 @@ This starts:
 - `mqtt-subscriber-topics`: subscribes to all broker topics from `examples/local-stack/subscriber-topics-config.json` and calls `mqtt_ingest.ingest_topics`.
 - `timescaledb`: local TimescaleDB 16 database.
 
+The SQL bootstrap mounted into `timescaledb` comes from `examples/sql/mqtt-ingest`, which is now maintained as a Git submodule checkout of the standalone SQL fork under `forks/mqtt-ingest-sql`.
+
 The local database service uses the Timescale HA Docker image so `timescaledb_toolkit` is available during bootstrap.
 
 The stack exposes these host ports for manual inspection:
 
 - MQTT broker: `127.0.0.1:1883`
+- MQTT broker with Technitium DNS: `mqtt.pi5.local:1883`
 - TimescaleDB/Postgres protocol: `127.0.0.1:55432`
 - Database: `mqtt`
 - User/password: `postgres` / `postgres`
+
+The broker now runs with per-client MQTT credentials and topic ACLs sourced from `examples/local-stack/mosquitto/`, which is a public broker submodule checkout. Before first startup, populate `examples/local-stack/mosquitto/passwords` from `passwords.example` or switch that submodule to your private broker branch. The Compose stack keeps `mqtt-broker` as the internal Docker DNS name, while host and LAN clients can use `mqtt.pi5.local` once Technitium resolves that name to the Docker host IP.
 
 The Compose service for the database is named `timescaledb`.
 
@@ -99,6 +104,12 @@ Inspect 24-hour aggregate rows:
 ./scripts/dev/query-local-24h-aggregates.sh
 ```
 
+Inspect power-energy reconciliation rows:
+
+```bash
+./scripts/dev/query-local-power-energy-reconciliation.sh
+```
+
 The aggregate queries include `device_id`, `metric_name`, plain in-bucket stats, percentile summaries such as median/p25/p75, trust metrics such as variance, standard error, and 95% confidence bounds, `quality_score` and its explainability fields, and the LOCF and linear boundary columns with their corresponding time-weighted averages.
 
 Inspect the topic overview table:
@@ -122,17 +133,19 @@ Stop the stack and remove volumes:
 ./scripts/dev/stop-local-test-stack.sh
 ```
 
-Use this after SQL bootstrap changes so TimescaleDB reinitializes the tables and hypertables.
+Use this after SQL bootstrap changes so TimescaleDB reinitializes the tables and hypertables from the standalone SQL submodule at `examples/sql/mqtt-ingest`.
 The SQL bootstrap now also enables `timescaledb_toolkit`, so the Timescale image must include that extension.
 
 ## Override Publisher Settings
+
+For a step-by-step guide to adding new publishers, subscriber accounts, and ACLs before startup or while the broker is already running, see [`docs/secure-broker-howto.md`](secure-broker-howto.md).
 
 The default `mqtt-publisher` service mounts `examples/local-stack/publisher-config.json` into the container at `/config/publisher-config.json`.
 The default `mqtt-subscriber` service mounts `examples/local-stack/subscriber-config.json` into the container at `/config/subscriber-config.json`.
 The topic-overview subscriber mounts `examples/local-stack/subscriber-topics-config.json` into the container at `/config/subscriber-topics-config.json`.
 
 Edit that JSON file to change the publisher set, topics, or generator ranges without rewriting the Compose command.
-Edit the subscriber JSON file to change broker/database settings or the topic filter list without rewriting the Compose command.
+Edit the subscriber JSON file to change broker/database settings, MQTT credentials, or the topic filter list without rewriting the Compose command.
 Edit the topic-overview subscriber JSON file to change the overview ingest function or the topic filter scope without rewriting the Compose command. The default config includes both `#` and `$SYS/#` so broker status topics are recorded in `mqtt_ingest.topic_overview`.
 
 Supported publisher topic generator kinds:
@@ -241,13 +254,21 @@ Run the full smoke path:
 ./scripts/dev/run-local-smoke-test.sh
 ```
 
-The smoke script is deterministic and separate from the continuous four-container workflow. It starts only `mqtt-broker` and `timescaledb`, runs the ingestor on the host, publishes traced messages for multiple devices under `sensors/+/temp`, and verifies rows in `mqtt_ingest.messages`, `mqtt_ingest.message_3m_aggregates`, `mqtt_ingest.message_15m_aggregates`, `mqtt_ingest.message_60m_aggregates`, and `mqtt_ingest.message_24h_aggregates`.
+The smoke script is deterministic and separate from the continuous four-container workflow. It starts only `mqtt-broker` and `timescaledb`, runs the ingestor on the host, publishes traced messages for multiple devices under `sensors/+/temp`, and verifies rows in `mqtt_ingest.messages`, the four `message_*_aggregates` tables, and the four `power_energy_*_reconciliation` tables.
 
 If your Python executable is not `python3`, override it:
 
 ```bash
 PYTHON_BIN=python ./scripts/dev/run-local-smoke-test.sh
 ```
+
+Run the secure auth/ACL smoke path:
+
+```bash
+./scripts/dev/run-secure-local-smoke-test.sh
+```
+
+This secure smoke path uses `mqtt.pi5.local` by default, validates authenticated publishers and subscribers, and checks that bad credentials and unauthorized publishes do not reach ingest storage.
 
 ## Capture MQTT Traffic
 

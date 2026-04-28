@@ -14,22 +14,27 @@ The secure broker setup is driven by these files:
 - `examples/local-stack/publisher-config.json`
 - `examples/local-stack/subscriber-config.json`
 - `examples/local-stack/subscriber-topics-config.json`
-- `/mnt/nvme/mqtt/mosquitto/mosquitto.conf`
-- `/mnt/nvme/mqtt/mosquitto/passwords`
-- `/mnt/nvme/mqtt/mosquitto/aclfile`
+- `examples/local-stack/mosquitto/mosquitto.conf`
+- `examples/local-stack/mosquitto/passwords`
+- `examples/local-stack/mosquitto/passwords.example`
+- `examples/local-stack/mosquitto/aclfile`
 - `examples/local-stack/docker-compose.yml`
 
 Important behavior:
 
 - the Compose service name inside Docker is still `mqtt-broker`
 - host or LAN clients can use `mqtt.pi5.local` if Technitium resolves that name to the Docker host IP
-- the live broker config source on the host is `/mnt/nvme/mqtt/mosquitto`
+- the live broker config source for the local stack is `examples/local-stack/mosquitto`
+- that path is a public broker submodule checkout
 - the broker container copies `mosquitto.conf`, `passwords`, and `aclfile` from `/mosquitto/config-src` into `/mosquitto/config` at startup
-- because of that copy step, edits to `/mnt/nvme/mqtt/mosquitto/passwords` or `aclfile` only take effect after restarting the `mqtt-broker` container
+- because of that copy step, edits to `examples/local-stack/mosquitto/passwords` or `aclfile` only take effect after restarting the `mqtt-broker` container
 - the bind mount is read-only, so changes made inside the running container do not persist back to the host
-- for this setup, the host files under `/mnt/nvme/mqtt/mosquitto` are the only persistent source of truth
+- for this setup, the repo files under `examples/local-stack/mosquitto/` are the persistent source of truth
 
-If you want to keep a repo-local template copy, treat `examples/local-stack/mosquitto/` as reference material only. It is no longer the mounted runtime source for the broker.
+The public broker submodule keeps `passwords` empty on purpose. Before first startup:
+
+1. copy `examples/local-stack/mosquitto/passwords.example` to `examples/local-stack/mosquitto/passwords` and replace placeholders with real Mosquitto hashes, or
+2. switch the broker submodule to your private branch that carries the real password file
 
 ## Read-Only Mount Rule
 
@@ -55,11 +60,12 @@ Those changes are either impossible because of the read-only source mount, or te
 
 Use this sequence whenever you add a new MQTT account.
 
-1. Edit `/mnt/nvme/mqtt/mosquitto/passwords` on the host
-2. Edit `/mnt/nvme/mqtt/mosquitto/aclfile` on the host
-3. Edit the matching app config on the host
-4. Restart `mqtt-broker`
-5. Restart the affected publisher or subscriber service
+1. Populate `examples/local-stack/mosquitto/passwords` from `passwords.example` or switch the broker submodule to your private branch
+2. Edit `examples/local-stack/mosquitto/passwords`
+3. Edit `examples/local-stack/mosquitto/aclfile`
+4. Edit the matching app config
+5. Restart `mqtt-broker`
+6. Restart the affected publisher or subscriber service
 
 For a publisher, the matching app config is usually:
 
@@ -80,8 +86,8 @@ This diagram shows the safe flow for adding one new publisher account in the cur
 ```mermaid
 sequenceDiagram
     actor Operator
-    participant HostAuth as Host auth files<br/>/mnt/nvme/mqtt/mosquitto
-    participant HostConfig as Host app config<br/>publisher-config.json
+    participant HostAuth as Repo auth files<br/>examples/local-stack/mosquitto
+    participant HostConfig as Repo app config<br/>publisher-config.json
     participant Compose as Docker Compose
     participant Broker as mqtt-broker container
     participant Publisher as mqtt-publisher container
@@ -126,7 +132,7 @@ If you only changed publisher credentials, you do not need to restart TimescaleD
 ## What Not To Do
 
 - do not add users only inside the container
-- do not edit only the repo copy under `examples/local-stack/mosquitto/` and expect the running broker to use it
+- do not expect edits under `examples/local-stack/mosquitto/` to affect the running broker until `mqtt-broker` is restarted
 - do not restart only `mqtt-publisher` after changing broker passwords or ACLs
 - do not assume a running broker will notice host-side auth file edits without a restart
 
@@ -138,8 +144,8 @@ If you only changed publisher credentials, you do not need to restart TimescaleD
 - subscribers should only get the read ACLs they actually need
 - adding a publisher usually means updating three things:
   - `publisher-config.json`
-  - `/mnt/nvme/mqtt/mosquitto/passwords`
-  - `/mnt/nvme/mqtt/mosquitto/aclfile`
+  - `examples/local-stack/mosquitto/passwords`
+  - `examples/local-stack/mosquitto/aclfile`
 
 ## Add Publishers On Initial Startup
 
@@ -147,7 +153,14 @@ Use this path when the stack is not running yet, or when you are preparing the n
 
 ### 1. Add the publisher credentials
 
-Append a new line in `/mnt/nvme/mqtt/mosquitto/passwords`.
+Append a new line in `examples/local-stack/mosquitto/passwords`.
+
+If the file is still empty from the public submodule checkout, create it first:
+
+```bash
+cp examples/local-stack/mosquitto/passwords.example \
+  examples/local-stack/mosquitto/passwords
+```
 
 Follow the existing format:
 
@@ -164,7 +177,7 @@ docker run --rm eclipse-mosquitto:2 \
   sh -c 'mosquitto_passwd -b /tmp/passwords publisher-node-4 publisher-node-4-secret && cat /tmp/passwords'
 ```
 
-This prints one `username:hash` line that you can copy into `/mnt/nvme/mqtt/mosquitto/passwords`.
+This prints one `username:hash` line that you can copy into `examples/local-stack/mosquitto/passwords`.
 
 If you want to generate a new hash with the same method used in this repo:
 
@@ -175,11 +188,11 @@ docker run --rm -v /tmp:/work eclipse-mosquitto:2 \
   cat /work/mqtt2postgres-mosquitto.passwd'
 ```
 
-Copy the generated line into `/mnt/nvme/mqtt/mosquitto/passwords`.
+Copy the generated line into `examples/local-stack/mosquitto/passwords`.
 
 ### 2. Add the publisher ACL
 
-Append a new block in `/mnt/nvme/mqtt/mosquitto/aclfile`.
+Append a new block in `examples/local-stack/mosquitto/aclfile`.
 
 Example:
 
@@ -246,7 +259,7 @@ For the default local config, these patterns are already covered:
 If you introduce a new metric such as `pressure`, add it to:
 
 - `examples/local-stack/subscriber-config.json`
-- `/mnt/nvme/mqtt/mosquitto/aclfile` under `user subscriber-ingest`
+- `examples/local-stack/mosquitto/aclfile` under `user subscriber-ingest`
 
 Example:
 
@@ -272,12 +285,12 @@ This is the safe operational path for the current repo setup.
 - restart `mqtt-subscriber` if you changed `subscriber-config.json`
 - restart `mqtt-subscriber-topics` if you changed `subscriber-topics-config.json`
 
-The running broker does not automatically consume edits from `/mnt/nvme/mqtt/mosquitto/` because those files are copied into the live config directory only during broker startup.
+The running broker does not automatically consume edits from `examples/local-stack/mosquitto/` because those files are copied into the live config directory only during broker startup.
 
 ### Recommended sequence
 
-1. Edit `/mnt/nvme/mqtt/mosquitto/passwords`
-2. Edit `/mnt/nvme/mqtt/mosquitto/aclfile`
+1. Edit `examples/local-stack/mosquitto/passwords`
+2. Edit `examples/local-stack/mosquitto/aclfile`
 3. Edit `examples/local-stack/publisher-config.json`
 4. Restart the broker
 5. Restart the publisher container
@@ -321,8 +334,8 @@ The cleanest pattern is one publisher account per device or logical simulator.
 
 For five new device simulators:
 
-1. add five hashed entries in `/mnt/nvme/mqtt/mosquitto/passwords`
-2. add five ACL blocks in `/mnt/nvme/mqtt/mosquitto/aclfile`
+1. add five hashed entries in `examples/local-stack/mosquitto/passwords`
+2. add five ACL blocks in `examples/local-stack/mosquitto/aclfile`
 3. add five publisher entries in `publisher-config.json`
 4. restart `mqtt-broker`
 5. restart `mqtt-publisher`
@@ -344,7 +357,7 @@ Example: add `sensors/node-1/pressure`.
 
 - in `publisher-config.json`, add a new topic entry under the existing `publisher-node-1`
 - in `subscriber-config.json`, add `sensors/+/pressure`
-- in `/mnt/nvme/mqtt/mosquitto/aclfile`, add `topic read sensors/+/pressure` under `user subscriber-ingest`
+- in `examples/local-stack/mosquitto/aclfile`, add `topic read sensors/+/pressure` under `user subscriber-ingest`
 
 ### Not needed
 
@@ -369,8 +382,8 @@ Use this when a new long-running consumer should read only a restricted set of s
 
 Steps:
 
-1. add a new hashed entry in `/mnt/nvme/mqtt/mosquitto/passwords`
-2. add a new `user ...` block in `/mnt/nvme/mqtt/mosquitto/aclfile` with only the read patterns that subscriber needs
+1. add a new hashed entry in `examples/local-stack/mosquitto/passwords`
+2. add a new `user ...` block in `examples/local-stack/mosquitto/aclfile` with only the read patterns that subscriber needs
 3. create a new JSON config based on `examples/local-stack/subscriber-config.json`
 4. run it either on the host or as another Compose service
 5. restart `mqtt-broker`
@@ -439,9 +452,9 @@ MQTT_HOST=127.0.0.1 ./scripts/dev/run-secure-local-smoke-test.sh
 
 ## Common Mistakes
 
-- adding a publisher to `publisher-config.json` but forgetting to add the broker password entry in `/mnt/nvme/mqtt/mosquitto/passwords`
-- adding the password entry but forgetting the ACL block in `/mnt/nvme/mqtt/mosquitto/aclfile`
+- adding a publisher to `publisher-config.json` but forgetting to add the broker password entry in `examples/local-stack/mosquitto/passwords`
+- adding the password entry but forgetting the ACL block in `examples/local-stack/mosquitto/aclfile`
 - adding a new metric without extending the ingest subscriber read ACL
-- editing `/mnt/nvme/mqtt/mosquitto/passwords` or `aclfile` and restarting only `mqtt-publisher`
+- editing `examples/local-stack/mosquitto/passwords` or `aclfile` and restarting only `mqtt-publisher`
 - using `mqtt.pi5.local` inside Docker configs instead of `mqtt-broker`
 - reusing one publisher account for multiple unrelated device namespaces

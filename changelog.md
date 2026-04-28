@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.3 - 2026-04-28
+
+### Topic: Repository Structure
+- Replaced the in-repo SQL bootstrap with a dedicated `examples/sql/mqtt-ingest` submodule backed by the standalone `mqtt-ingest-sql` repository.
+- Replaced the in-repo broker config directory with a dedicated `examples/local-stack/mosquitto` submodule backed by the standalone `mosquitto-broker` repository.
+- Kept the local stack mount paths unchanged so Compose continues to consume `./mosquitto` and `../sql/mqtt-ingest`.
+
+### Topic: Broker Workflow
+- Updated the local broker integration to consume the public broker submodule by default.
+- Documented the public/private broker branch workflow, including the `passwords.example` bootstrap path for public clones and the separate private branch for secret-bearing broker state.
+
+### Topic: Documentation
+- Updated README and runbook guidance to explain the new submodule-backed SQL and broker ownership boundaries.
+- Updated the secure broker how-to to describe first-start password initialization from the public broker submodule.
+
 ## 0.9.2 - 2026-04-27
 
 ### Topic: Secure MQTT Broker

@@ -37,7 +37,7 @@ services:
     ports:
       - "1883:1883"
     volumes:
-      - /mnt/nvme/mqtt/mosquitto:/mosquitto/config-src:ro
+      - ./mosquitto:/mosquitto/config-src:ro
 
   mqtt-subscriber:
     build:

@@ -10,6 +10,8 @@ See [Ingest pipeline](ingest-pipeline.md) for the subscriber-to-database flowcha
 
 ## Database Ingest
 
+The database bootstrap described below is maintained in the standalone SQL submodule checkout at `examples/sql/mqtt-ingest`.
+
 The default local TimescaleDB bootstrap creates:
 
 - schema `mqtt_ingest`
@@ -18,6 +20,10 @@ The default local TimescaleDB bootstrap creates:
 - hypertable `mqtt_ingest.message_15m_aggregates`
 - hypertable `mqtt_ingest.message_60m_aggregates`
 - hypertable `mqtt_ingest.message_24h_aggregates`
+- hypertable `mqtt_ingest.power_energy_3m_reconciliation`
+- hypertable `mqtt_ingest.power_energy_15m_reconciliation`
+- hypertable `mqtt_ingest.power_energy_60m_reconciliation`
+- hypertable `mqtt_ingest.power_energy_24h_reconciliation`
 - table `mqtt_ingest.topic_overview`
 - extensions `timescaledb` and `timescaledb_toolkit`
 - function `mqtt_ingest.ingest_message(topic text, payload text, received_at timestamptz, metadata jsonb)`
@@ -26,10 +32,18 @@ The default local TimescaleDB bootstrap creates:
 - function `mqtt_ingest.refresh_message_15m_aggregates(...)`
 - function `mqtt_ingest.refresh_message_60m_aggregates(...)`
 - function `mqtt_ingest.refresh_message_24h_aggregates(...)`
+- function `mqtt_ingest.refresh_power_energy_3m_reconciliation(...)`
+- function `mqtt_ingest.refresh_power_energy_15m_reconciliation(...)`
+- function `mqtt_ingest.refresh_power_energy_60m_reconciliation(...)`
+- function `mqtt_ingest.refresh_power_energy_24h_reconciliation(...)`
 - TimescaleDB background job `mqtt_ingest.refresh_message_3m_aggregates_job`
 - TimescaleDB background job `mqtt_ingest.refresh_message_15m_aggregates_job`
 - TimescaleDB background job `mqtt_ingest.refresh_message_60m_aggregates_job`
 - TimescaleDB background job `mqtt_ingest.refresh_message_24h_aggregates_job`
+- TimescaleDB background job `mqtt_ingest.refresh_power_energy_3m_reconciliation_job`
+- TimescaleDB background job `mqtt_ingest.refresh_power_energy_15m_reconciliation_job`
+- TimescaleDB background job `mqtt_ingest.refresh_power_energy_60m_reconciliation_job`
+- TimescaleDB background job `mqtt_ingest.refresh_power_energy_24h_reconciliation_job`
 
 The function stores every message in the generic hypertable. It keeps the raw payload, extracts a numeric value when possible, and accepts both plain numeric payloads and the traced JSON payloads emitted by the local publisher.
 
@@ -87,6 +101,45 @@ Aggregate quality fields:
 See [Aggregate status and quality](aggregate-status-and-quality.md) for the scoring thresholds, state transitions, and Mermaid statechart.
 
 The ingest function refreshes the touched 3-minute, 15-minute, 60-minute, and 24-hour buckets immediately so ongoing rows appear on the fly as `tba`. TimescaleDB background jobs refresh those aggregate tables once per minute so completed buckets move to `aggregated`.
+
+## Power/Energy Reconciliation
+
+For devices that publish both `sensors/<device>/power` and `sensors/<device>/energy`, the database also stores per-bucket reconciliation rows in:
+
+- `mqtt_ingest.power_energy_3m_reconciliation`
+- `mqtt_ingest.power_energy_15m_reconciliation`
+- `mqtt_ingest.power_energy_60m_reconciliation`
+- `mqtt_ingest.power_energy_24h_reconciliation`
+
+These rows intentionally track energy in two different ways:
+
+- from the cumulative `energy` counter using boundary deltas
+- from integrating `power` across the bucket using boundary-aware averages
+
+Stored reconciliation fields include:
+
+- `power_locf_avg_w` and `power_linear_avg_w`
+- `power_locf_integral_ws` and `power_linear_integral_ws`
+- `energy_locf_value_at_bucket_start` and `energy_locf_value_at_bucket_end`
+- `energy_linear_value_at_bucket_start` and `energy_linear_value_at_bucket_end`
+- `energy_locf_delta_ws` and `energy_linear_delta_ws`
+- signed, absolute, and percent drift fields for both the LOCF and linear paths
+
+Formulas:
+
+- `power_locf_integral_ws = power_locf_avg_w * bucket_seconds`
+- `power_linear_integral_ws = power_linear_avg_w * bucket_seconds`
+- `energy_locf_delta_ws = energy_locf_value_at_bucket_end - energy_locf_value_at_bucket_start`
+- `energy_linear_delta_ws = energy_linear_value_at_bucket_end - energy_linear_value_at_bucket_start`
+
+Drift fields are computed as integrated `power` minus cumulative `energy` delta. Percent drift is `NULL` when the energy delta is `0` or unavailable.
+
+Rows are matched strictly by fixed topic pair:
+
+- `sensors/<device>/power`
+- `sensors/<device>/energy`
+
+When only one side is present in a bucket, the missing-side and drift fields stay `NULL`. This is intentional so missing data is not mistaken for zero drift.
 
 ## Logging
 

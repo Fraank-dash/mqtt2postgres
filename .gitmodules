@@ -1,3 +1,6 @@
 [submodule "examples/sql/mqtt-ingest"]
 	path = examples/sql/mqtt-ingest
 	url = https://github.com/Fraank-dash/mqtt-ingest-sql.git
+[submodule "examples/local-stack/mosquitto"]
+	path = examples/local-stack/mosquitto
+	url = https://github.com/Fraank-dash/mosquitto-broker.git

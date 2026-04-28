@@ -1,5 +1,7 @@
 # Aggregate Status And Quality
 
+The aggregate tables and scoring logic described here are defined by the standalone SQL submodule checkout at `examples/sql/mqtt-ingest`.
+
 This project stores retained aggregate buckets in:
 
 - `mqtt_ingest.message_3m_aggregates`
