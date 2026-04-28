@@ -64,7 +64,7 @@ docker compose -f examples/local-stack/docker-compose.yml down -v
 ```
 
 Use the reset path after SQL bootstrap changes so the database is recreated from `examples/sql/mqtt-ingest`.
-That path is now a Git submodule checkout backed by the standalone SQL fork in `forks/mqtt-ingest-sql`.
+That path is now a Git submodule checkout.
 
 ## Simulation Model
 
@@ -290,7 +290,6 @@ PYTHONPATH=src mqtt2postgres-twin-config \
 
 - `examples/local-stack/`: primary local bench and JSON configs
 - `examples/sql/mqtt-ingest`: standalone SQL submodule checkout for TimescaleDB bootstrap and ingest SQL
-- `forks/mqtt-ingest-sql/`: standalone SQL fork source repository and provenance files
 - `src/apps/`: canonical subscriber and publisher app packages
 - `src/broker/`: shared broker protocol/client helpers
 - `src/observability/`: shared logging and tracing helpers

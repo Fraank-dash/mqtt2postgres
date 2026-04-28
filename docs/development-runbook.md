@@ -22,7 +22,7 @@ This starts:
 - `mqtt-subscriber-topics`: subscribes to all broker topics from `examples/local-stack/subscriber-topics-config.json` and calls `mqtt_ingest.ingest_topics`.
 - `timescaledb`: local TimescaleDB 16 database.
 
-The SQL bootstrap mounted into `timescaledb` comes from `examples/sql/mqtt-ingest`, which is now maintained as a Git submodule checkout of the standalone SQL fork under `forks/mqtt-ingest-sql`.
+The SQL bootstrap mounted into `timescaledb` comes from `examples/sql/mqtt-ingest`, which is now maintained as a Git submodule checkout.
 
 The local database service uses the Timescale HA Docker image so `timescaledb_toolkit` is available during bootstrap.
 
